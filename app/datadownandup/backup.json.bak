@@ -1,0 +1,148 @@
+{
+  "__collections__": {
+    "albums": {
+    "album_001": {
+      "albumId": "album_001",
+      "title": "Sky Tour",
+      "artistId": "artist_001",
+      "artistName": "Sơn Tùng M-TP",
+      "coverImageUrl": "https://upload.wikimedia.org/wikipedia/vi/b/bf/Sky_Tour.jpg",
+      "releaseDate": {
+        "_seconds": 1591932485,
+        "_nanoseconds": 0
+      },
+      "genre": [
+        "Pop"
+      ],
+      "totalTracks": 12,
+      "songIds": [
+        "song_001",
+        "song_002"
+      ],
+      "createdAt": {
+        "_seconds": 1775273403,
+        "_nanoseconds": 0
+      }
+    },
+    "album_002": {
+      "albumId": "album_002",
+      "title": "Album I",
+      "artistId": "artist_002",
+      "artistName": "San Holo",
+      "coverImageUrl": "https://i.scdn.co/image/ab67616d0000b27383c8aaf6a46cdcb229ef2c8f",
+      "releaseDate": {
+        "_seconds": 1568332800,
+        "_nanoseconds": 0
+      },
+      "genre": [
+        "Electronic",
+        "Future Bass"
+      ],
+      "totalTracks": 15,
+      "songIds": [
+        "song_002"
+      ],
+      "createdAt": {
+        "_seconds": 1775277000,
+        "_nanoseconds": 0
+      }
+    }
+  },
+  "artists": {
+    "artist_001": {
+      "artistId": "artist_001",
+      "artist_001": "Sơn Tùng M-TP",
+      "bio": "Ca sĩ, rapper, nhạc sĩ người Việt Nam",
+      "genres": [
+        "Pop",
+        "R&B"
+      ],
+      "followers": 0,
+      "verified": true,
+      "createdAt": {
+        "_seconds": 1775272917,
+        "_nanoseconds": 0
+      },
+      "photoUrl": "https://yt3.googleusercontent.com/c-Z7mIlntSpG6VyQ5ZqaPggqkZRhaySr-H5ZEazFN2iR1pP4eD1UGekwu0y--c4CSVhJJ1A4QT8=s900-c-k-c0x00ffffff-no-rj"
+    },
+    "artist_002": {
+      "artistId": "artist_002",
+      "artist_002": "San Holo",
+      "bio": "Dutch DJ, musician, and record producer known for future bass and electronic music",
+      "genres": [
+        "Electronic",
+        "Future Bass",
+        "EDM"
+      ],
+      "followers": 0,
+      "verified": true,
+      "createdAt": {
+        "_seconds": 1775277000,
+        "_nanoseconds": 0
+      },
+      "photoUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQXqtuc3xozWVmJwSOiFZXfd5Ni_rvTzcFxfA&s"
+    }
+  },
+  "songs": {
+    "song_001": {
+      "songId": "song_001",
+      "title": "Hãy Trao Cho Anh",
+      "artistId": "artist_001",
+      "artistName": "Sơn Tùng M-TP",
+      "albumId": "album_001",
+      "albumName": "Sky Tour",
+      "duration": 240,
+      "audioUrl": "https://github.com/cobalts-theon/music-data/raw/refs/heads/main/song_001.mp3",
+      "coverImageUrl": "https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcSAWde4SYTNZdLqtAcRCPs8pEsp2azAEN3jgA&s",
+      "genre": [
+        "Pop",
+        "R&B"
+      ],
+      "releaseDate": {
+        "_seconds": 1561914000,
+        "_nanoseconds": 0
+      },
+      "playCount": 0,
+      "likeCount": 0,
+      "lyrics": "Lala lala lala\nHình bóng ai đó nhẹ nhàng vụt qua nơi đây\nQuyến rũ ngây ngất loạn nhịp làm tim mê say\nCuốn lấy áng mây theo cơn sóng xô dập dìu\nNụ cười ngọt ngào cho ta tan vào phút giây miên man quên hết con đường về eh\nLet me know your name\nChẳng thể tìm thấy lối về eh\nLet me know your name\nĐiệu nhạc hòa quyện trong ánh mắt đôi môi\nDẫn lối những bối rối rung động khẽ lên ngôi\nVà rồi khẽ và rồi khẽ khẽ\nChạm nhau mang vô vàn đắm đuối vấn vương dâng tràn\nLấp kín chốn nhân gian làn gió hoá sắc hương mơ màng\nMột giây ngang qua đời cất tiếng nói không nên lời\nẤm áp đến trao tay ngàn sao trời thêm chơi vơi\nDịu êm không gian bừng sáng đánh thức muôn hoa mừng\nQuấn quít hát ngân nga từng chút níu bước chân em dừng\nBao ý thơ tương tư ngẩn ngơ (la la la)\nLưu dấu nơi mê cung đẹp thẫn thờ\nOh oh oh oh uh\nHãy trao cho anh hãy trao cho anh\nHãy trao cho anh thứ anh đang mong chờ (oh oh oh oh)\nHãy trao cho anh hãy trao cho anh\nHãy mau làm điều ta muốn vào khoảnh khắc này đê (oh oh oh oh)\nHãy trao cho anh đê hãy trao cho anh đê\nHãy trao anh trao cho anh đi những yêu thương nồng cháy (chỉ mình anh thôi)\nTrao anh ái ân nguyên vẹn đong đầy\nLala lala\nLala lala\nLala lala\nLala lala\nLooking at my Gucci is about that time\nWe can smoke a blunt and pop a bottle of wine\nNow get yourself together and be ready by nine\nCuz we gon' do some things that will shatter your spine\nCome one undone Snoop Dogg Son Tung\nLong Beach is the city that I come from\nSo if you want some get some\nBetter enough take some take some\nChạm nhau mang vô vàn đắm đuối vấn vương dâng tràn\nLấp kín chốn nhân gian làn gió hóa sắc hương mơ màng\nMột giây ngang qua đời cất tiếng nói không nên lời\nẤm áp đến trao tay ngàn sao trời lòng càng thêm chơi vơi\nDịu êm không gian bừng sáng đánh thức muôn hoa mừng\nQuấn quít hát ngân nga từng chút níu bước chân em dừng\nBao ý thơ tương tư ngẩn ngơ (la la la)\nLưu dấu nơi mê cung đẹp thẫn thờ\nOh oh oh oh uh\nHãy trao cho anh hãy trao cho anh\nHãy trao cho anh thứ anh đang mong chờ (oh oh oh oh)\nHãy trao cho anh hãy trao cho anh\nHãy mau làm điều ta muốn vào khoảnh khắc này đê (oh oh oh oh)\nHãy trao cho anh đê hãy trao cho anh đê\nHãy trao anh trao cho anh đi những yêu thương nồng cháy (chỉ mình anh thôi)\nTrao anh ái ân nguyên vẹn đong đầy\nLala lala\nLala lala\nLala lala\nLala lala\nLàm cho ta ngắm thêm nàng vội vàng qua chốc lát\nNhư thanh âm chứa bao lời gọi mời trong khúc hát\nLiêu xiêu ta xuyến xao rạo rực khát khao trông mong\nDịu dàng lại gần nhau hơn dang tay ôm em vào lòng\nThôi trao đi trao hết đi đừng ngập ngừng che dấu nữa\nQuên đi quên hết đi ngại ngùng lại gần thêm chút nữa\nChìm đắm giữa khung trời riêng hai ta như dần hòa quyện\nMắt nhắm mắt tay đan tay hồn lạc về miền trăng sao\nBuông lơi cho ta ngắm thêm nàng vội vàng qua chốc lát\nNhư thanh âm chứa bao lời gọi mời trong khúc hát\nLiêu xiêu ta xuyến xao rạo rực khát khao trông mong\nDịu dàng lại gần nhau hơn dang tay ôm em vào lòng\nTrao đi trao hết đi đừng ngập ngừng che dấu nữa\nQuên đi quên hết đi ngại ngùng lại gần thêm chút nữa\nChìm đắm giữa khung trời riêng hai ta như dần hòa quyện\nMắt nhắm mắt tay đan tay hồn lạc về miền trăng sao\nHãy trao cho anh hãy trao cho anh (let's go)\nHãy trao cho anh cho anh cho anh (lala)\nHãy trao cho anh hãy trao cho anh\nHãy trao cho anh cho anh cho anh (lala)\nHãy trao cho anh hãy trao cho anh\nHãy trao cho anh cho anh cho anh (lala)\nHãy trao cho anh hãy trao cho anh\nHãy trao cho anh thứ anh đang mong chờ",
+      "createdAt": {
+        "_seconds": 1775276210,
+        "_nanoseconds": 0
+      },
+      "updatedAt": {
+        "_seconds": 1775276222,
+        "_nanoseconds": 0
+      }
+    },
+    "song_002": {
+      "songId": "song_002",
+      "title": "I WANNA SHOW YOU",
+      "artistId": "artist_002",
+      "artistName": "San Holo",
+      "albumId": "album_002",
+      "albumName": "Album I",
+      "duration": 210,
+      "audioUrl": "https://github.com/cobalts-theon/music-data/raw/refs/heads/main/song_002.mp3",
+      "coverImageUrl": "https://i.scdn.co/image/ab67616d0000b27383c8aaf6a46cdcb229ef2c8f",
+      "genre": [
+        "Electronic",
+        "Future Bass"
+      ],
+      "releaseDate": {
+        "_seconds": 1568332800,
+        "_nanoseconds": 0
+      },
+      "playCount": 0,
+      "likeCount": 0,
+      "lyrics": "",
+      "createdAt": {
+        "_seconds": 1775277000,
+        "_nanoseconds": 0
+      },
+      "updatedAt": {
+        "_seconds": 1775277000,
+        "_nanoseconds": 0
+      }
+    }
+  }
+}
