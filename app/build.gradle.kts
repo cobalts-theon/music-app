@@ -1,7 +1,7 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    id("com.google.gms.google-services")
+    // TODO: Remove Firebase - id("com.google.gms.google-services")
 }
 
 android {
@@ -38,20 +38,22 @@ android {
 
 dependencies {
 
-    // Firebase BOM - Quản lý phiên bản Firebase tự động
-    implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
-    implementation("com.google.firebase:firebase-analytics")
-    implementation("com.google.firebase:firebase-firestore")
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-storage")
+    // TODO: Migrate to REST API - Replace Firebase with Retrofit + OkHttp
+    // implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
+    // implementation("com.google.firebase:firebase-analytics")
+    // implementation("com.google.firebase:firebase-firestore")
+    // implementation("com.google.firebase:firebase-auth")
+    // implementation("com.google.firebase:firebase-storage")
+    // implementation("com.firebaseui:firebase-ui-auth:8.0.2")
     
-    // Firebase UI (Optional - cho auth UI)
-    implementation("com.firebaseui:firebase-ui-auth:8.0.2")
+    // Retrofit for REST API calls to Node.js backend
+    implementation("com.squareup.retrofit2:retrofit:2.11.0")
+    implementation("com.squareup.retrofit2:converter-gson:2.11.0")
     
-    // Google Sign-In
-    implementation("androidx.credentials:credentials:1.5.0")
-    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
-    implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
+    // Google Sign-In (có thể giữ nếu dùng OAuth)
+    // implementation("androidx.credentials:credentials:1.5.0")
+    // implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    // implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")
     
     // AndroidX Core
     implementation(libs.androidx.core.ktx)

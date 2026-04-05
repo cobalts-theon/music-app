@@ -13,7 +13,14 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Firebase config files (removed - using Node.js backend instead)
 /app/google-services.json
+firebase.json
+.firebaserc
+firestore.rules
+firestore.indexes.json
+
 /app/datadownandup/
 .idea/
 .gradle/

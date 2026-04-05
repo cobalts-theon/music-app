@@ -1,5 +1,6 @@
 package com.example.cinderssoul
 
+import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -19,11 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -32,15 +29,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.media3.common.MediaItem
-import androidx.media3.exoplayer.ExoPlayer
 import coil3.compose.rememberAsyncImagePainter
 import com.example.cinderssoul.models.Song
 import com.example.cinderssoul.repository.SongRepository
-import com.google.firebase.storage.FirebaseStorage
-import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
     private val songRepository = SongRepository()
@@ -56,27 +48,12 @@ class MainActivity : ComponentActivity() {
                     val factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
                             @Suppress("UNCHECKED_CAST")
-                            return MusicViewModel(songRepository) as T
+                            return MusicViewModel(application, songRepository) as T
                         }
                     }
                     MusicShow(viewModel = viewModel(factory = factory))
                 }
             }
-        }
-    }
-}
-
-class MusicViewModel(private val songRepository: SongRepository) : ViewModel() {
-    private val _songsState = mutableStateOf<Result<List<Song>>?>(null)
-    val songsState: State<Result<List<Song>>?> = _songsState
-
-    init {
-        fetchSongs()
-    }
-
-    fun fetchSongs() {
-        viewModelScope.launch {
-            _songsState.value = songRepository.getAllSongs()
         }
     }
 }
@@ -87,14 +64,6 @@ fun MusicShow(
     viewModel: MusicViewModel = viewModel()
 ) {
     val result by viewModel.songsState
-    val context = LocalContext.current
-    val exoPlayer = remember { ExoPlayer.Builder(context).build() }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            exoPlayer.release()
-        }
-    }
 
     Box(modifier = modifier.fillMaxSize().padding(top = 32.dp)) {
         val currentResult = result
@@ -108,47 +77,7 @@ fun MusicShow(
                     items(songs) { song ->
                         SongItem(
                             song = song,
-                            onPlayClick = {
-                                if (exoPlayer.currentMediaItem?.mediaId == song.songId) {
-                                    if (exoPlayer.isPlaying) {
-                                        exoPlayer.pause()
-                                    } else {
-                                        exoPlayer.play()
-                                    }
-                                } else {
-                                    // Click vào bài mới
-                                    exoPlayer.stop()
-                                    exoPlayer.clearMediaItems()
-
-                                    if (song.audioUrl.isNotEmpty()) {
-                                        val playMediaItem = { uri: android.net.Uri ->
-                                            val mediaItem = MediaItem.Builder()
-                                                .setUri(uri)
-                                                .setMediaId(song.songId)
-                                                .build()
-                                            exoPlayer.setMediaItem(mediaItem)
-
-                                            // QUAN TRỌNG: Thiết lập để tự phát khi đủ buffer
-                                            exoPlayer.playWhenReady = true
-                                            exoPlayer.prepare()
-                                        }
-
-                                        if (song.audioUrl.startsWith("http")) {
-                                            playMediaItem(android.net.Uri.parse(song.audioUrl))
-                                        } else {
-                                            // Xử lý Firebase Storage như cũ...
-                                            val storageRef = if (song.audioUrl.startsWith("gs://")) {
-                                                FirebaseStorage.getInstance().getReferenceFromUrl(song.audioUrl)
-                                            } else {
-                                                FirebaseStorage.getInstance().getReference(song.audioUrl)
-                                            }
-                                            storageRef.downloadUrl.addOnSuccessListener { uri ->
-                                                playMediaItem(uri)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
+                            onPlayClick = { viewModel.playSong(song) }
                         )
                     }
                 }
@@ -189,6 +118,7 @@ fun SongItem(song: Song, onPlayClick: () -> Unit) {
 @Preview(showBackground = true)
 @Composable
 fun PreviewMusicShow() {
+    val context = LocalContext.current
     // 1. Define a mock version of the repository for the preview
     val songRepository = object : SongRepository() {
         override suspend fun getAllSongs(): Result<List<Song>> {
@@ -203,7 +133,7 @@ fun PreviewMusicShow() {
     val factory = object : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             @Suppress("UNCHECKED_CAST")
-            return MusicViewModel(songRepository) as T
+            return MusicViewModel(context.applicationContext as Application, songRepository) as T
         }
     }
 
