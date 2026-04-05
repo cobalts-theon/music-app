@@ -1,7 +1,6 @@
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
-    // TODO: Remove Firebase - id("com.google.gms.google-services")
 }
 
 android {
@@ -38,7 +37,6 @@ android {
 
 dependencies {
 
-    // TODO: Migrate to REST API - Replace Firebase with Retrofit + OkHttp
     // implementation(platform("com.google.firebase:firebase-bom:32.7.0"))
     // implementation("com.google.firebase:firebase-analytics")
     // implementation("com.google.firebase:firebase-firestore")
@@ -49,8 +47,7 @@ dependencies {
     // Retrofit for REST API calls to Node.js backend
     implementation("com.squareup.retrofit2:retrofit:2.11.0")
     implementation("com.squareup.retrofit2:converter-gson:2.11.0")
-    
-    // Google Sign-In (có thể giữ nếu dùng OAuth)
+
     // implementation("androidx.credentials:credentials:1.5.0")
     // implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
     // implementation("com.google.android.libraries.identity.googleid:googleid:1.2.0")

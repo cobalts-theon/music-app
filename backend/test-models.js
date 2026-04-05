@@ -49,7 +49,7 @@ async function testModels() {
     const users = await User.findAll();
     console.log(`   ✅ Found ${users.length} users`);
     if (users.length > 0) {
-      console.log(`   📌 Sample: ${users[0].display_name} (${users[0].email})`);
+      console.log(`   Sample: ${users[0].display_name} (${users[0].email})`);
     }
 
     // 5. Test Playlist with songs
@@ -63,10 +63,10 @@ async function testModels() {
         }
       ]
     });
-    console.log(`   ✅ Found ${playlists.length} playlists`);
+    console.log(`   Found ${playlists.length} playlists`);
     if (playlists.length > 0) {
       const playlist = playlists[0];
-      console.log(`   📌 Playlist: "${playlist.name}" (${playlist.songs.length} songs)`);
+      console.log(`   Playlist: "${playlist.name}" (${playlist.songs.length} songs)`);
       playlist.songs.slice(0, 3).forEach((song, index) => {
         console.log(`      ${index + 1}. ${song.title} - ${song.artist.name}`);
       });
@@ -86,10 +86,10 @@ async function testModels() {
     });
     console.log(`   ✅ Found ${searchResults.length} songs containing "a"`);
 
-    console.log('\n✅ All model tests passed!\n');
+    console.log('\nAll model tests passed!\n');
 
   } catch (error) {
-    console.error('❌ Error testing models:', error.message);
+    console.error('Error testing models:', error.message);
     console.error(error);
   } finally {
     process.exit();
