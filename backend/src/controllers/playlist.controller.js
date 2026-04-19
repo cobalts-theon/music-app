@@ -39,7 +39,7 @@ exports.getUserPlaylists = async (req, res, next) => {
 exports.getPlaylist = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const userId = req.user.id;
+    const userId = req.user?.id;
 
     const playlist = await Playlist.findOne({
       where: { id },

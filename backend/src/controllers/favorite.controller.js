@@ -39,7 +39,7 @@ exports.getFavorites = async (req, res, next) => {
 exports.addFavorite = async (req, res, next) => {
   try {
     const userId = req.user.id;
-    const { songId } = req.body;
+    const songId = req.params.songId || req.body.songId;
 
     if (!songId) {
       return next(new AppError('Song ID is required', 400));

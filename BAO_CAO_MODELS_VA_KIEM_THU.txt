@@ -1,0 +1,898 @@
+================================================================================
+        BÁO CÁO CHI TIẾT VỀ MODELS, MÔ TÃ VÀ KẾ HOẠCH KIỂM THỬ
+                        CINDER'S SOUL MUSIC APP
+================================================================================
+
+Dự án: Cinder's Soul - Ứng dụng nghe nhạc trực tuyến
+Kiến trúc: Android App (Kotlin) + Node.js Backend + MySQL Database
+Ngày báo cáo: 2026-04-07
+
+================================================================================
+                          PHẦN I: TỔNG QUAN HỆ THỐNG
+================================================================================
+
+1. KIẾN TRÚC TỔNG QUÁT
+----------------------
+┌─────────────────────┐
+│  Android App        │  
+│  (Kotlin + Jetpack) │  ──► REST API calls qua Retrofit
+└─────────────────────┘
+          │
+          ↓
+┌─────────────────────┐
+│  Node.js Backend    │
+│  (Express.js)       │  ──► JWT Authentication
+└─────────────────────┘
+          │
+          ↓
+┌─────────────────────┐
+│  MySQL Database     │
+│  (Sequelize ORM)    │
+└─────────────────────┘
+
+2. CÔNG NGHỆ SỬ DỤNG
+---------------------
+Backend:
+- Node.js với Express.js framework
+- MySQL database với Sequelize ORM
+- JWT (JSON Web Tokens) cho authentication
+- bcryptjs cho mã hóa password
+- Multer cho upload file
+- Express-validator cho validation
+- Morgan cho logging
+
+Android:
+- Kotlin với Jetpack Components
+- Retrofit 2 cho REST API
+- ExoPlayer cho phát nhạc
+- Room Database cho offline caching
+- DataStore cho lưu JWT token
+- Coroutines cho async operations
+
+================================================================================
+                    PHẦN II: CHI TIẾT CÁC MODELS
+================================================================================
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ MODEL 1: USER (Người dùng)                                                │
+└────────────────────────────────────────────────────────────────────────────┘
+
+MỤC ĐÍCH:
+Lưu trữ thông tin tài khoản người dùng của hệ thống.
+
+CẤU TRÚC DỮ LIỆU:
+┌─────────────────┬──────────────┬────────────┬──────────────────────────┐
+│ Trường          │ Kiểu dữ liệu │ Bắt buộc   │ Mô tả                    │
+├─────────────────┼──────────────┼────────────┼──────────────────────────┤
+│ id              │ INTEGER      │ PK, AI     │ ID tự động tăng          │
+│ email           │ VARCHAR(255) │ UNIQUE, NN │ Email đăng nhập (unique) │
+│ password_hash   │ VARCHAR(255) │ NN         │ Mật khẩu đã hash (bcrypt)│
+│ display_name    │ VARCHAR(255) │ NN         │ Tên hiển thị             │
+│ avatar_url      │ VARCHAR(512) │ NULL       │ URL ảnh đại diện         │
+│ created_at      │ DATETIME     │ DEFAULT NOW│ Thời gian tạo            │
+│ updated_at      │ DATETIME     │ DEFAULT NOW│ Thời gian cập nhật       │
+└─────────────────┴──────────────┴────────────┴──────────────────────────┘
+
+CHỈ SỐ (INDEXES):
+- idx_email: Tìm kiếm nhanh theo email khi đăng nhập
+
+VALIDATION:
+- Email phải đúng định dạng email (isEmail validator)
+- Password_hash tối thiểu 60 ký tự (bcrypt output)
+- Display_name không được rỗng
+
+QUAN HỆ:
+- User hasMany Playlists (1 user có nhiều playlist)
+- User hasMany Favorites (1 user có nhiều bài hát yêu thích)
+- User hasMany RefreshTokens (1 user có nhiều token)
+
+TÍNH NĂNG BẢO MẬT:
+- Password được hash bằng bcryptjs với salt rounds = 10
+- Email là unique constraint để tránh trùng lặp
+- Không trả về password_hash trong API response
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ MODEL 2: ARTIST (Nghệ sĩ)                                                 │
+└────────────────────────────────────────────────────────────────────────────┘
+
+MỤC ĐÍCH:
+Lưu thông tin về nghệ sĩ/ca sĩ thực hiện bài hát.
+
+CẤU TRÚC DỮ LIỆU:
+┌─────────────────┬──────────────┬────────────┬──────────────────────────┐
+│ Trường          │ Kiểu dữ liệu │ Bắt buộc   │ Mô tả                    │
+├─────────────────┼──────────────┼────────────┼──────────────────────────┤
+│ id              │ INTEGER      │ PK, AI     │ ID tự động tăng          │
+│ name            │ VARCHAR(255) │ NN         │ Tên nghệ sĩ              │
+│ bio             │ TEXT         │ NULL       │ Tiểu sử nghệ sĩ          │
+│ avatar_url      │ VARCHAR(512) │ NULL       │ URL ảnh nghệ sĩ          │
+│ created_at      │ DATETIME     │ DEFAULT NOW│ Thời gian tạo            │
+│ updated_at      │ DATETIME     │ DEFAULT NOW│ Thời gian cập nhật       │
+└─────────────────┴──────────────┴────────────┴──────────────────────────┘
+
+CHỈ SỐ (INDEXES):
+- idx_name: Tìm kiếm nghệ sĩ theo tên
+
+VALIDATION:
+- Name không được rỗng
+- Avatar_url phải là URL hợp lệ (nếu có)
+
+QUAN HỆ:
+- Artist hasMany Songs (1 nghệ sĩ có nhiều bài hát)
+- Artist hasMany Albums (1 nghệ sĩ có nhiều album)
+
+VÍ DỤ DỮ LIỆU:
+{
+  "id": 1,
+  "name": "Sơn Tùng M-TP",
+  "bio": "Ca sĩ, nhạc sĩ Việt Nam",
+  "avatar_url": "https://example.com/artists/sontung.jpg"
+}
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ MODEL 3: ALBUM (Album nhạc)                                               │
+└────────────────────────────────────────────────────────────────────────────┘
+
+MỤC ĐÍCH:
+Nhóm các bài hát của cùng một nghệ sĩ thành album/tuyển tập.
+
+CẤU TRÚC DỮ LIỆU:
+┌─────────────────┬──────────────┬────────────┬──────────────────────────┐
+│ Trường          │ Kiểu dữ liệu │ Bắt buộc   │ Mô tả                    │
+├─────────────────┼──────────────┼────────────┼──────────────────────────┤
+│ id              │ INTEGER      │ PK, AI     │ ID tự động tăng          │
+│ title           │ VARCHAR(255) │ NN         │ Tên album                │
+│ artist_id       │ INTEGER      │ FK, NN     │ ID nghệ sĩ (foreign key) │
+│ cover_url       │ VARCHAR(512) │ NULL       │ URL ảnh bìa album        │
+│ release_date    │ DATE         │ NULL       │ Ngày phát hành           │
+│ created_at      │ DATETIME     │ DEFAULT NOW│ Thời gian tạo            │
+│ updated_at      │ DATETIME     │ DEFAULT NOW│ Thời gian cập nhật       │
+└─────────────────┴──────────────┴────────────┴──────────────────────────┘
+
+CHỈ SỐ (INDEXES):
+- idx_artist_id: Lấy tất cả album của 1 nghệ sĩ
+- idx_title: Tìm kiếm album theo tên
+
+VALIDATION:
+- Title không được rỗng
+- Artist_id phải tồn tại trong bảng artists
+- Release_date phải là ngày hợp lệ
+
+QUAN HỆ:
+- Album belongsTo Artist (1 album thuộc về 1 nghệ sĩ)
+- Album hasMany Songs (1 album có nhiều bài hát)
+
+VÍ DỤ DỮ LIỆU:
+{
+  "id": 1,
+  "title": "Sky Tour",
+  "artist_id": 1,
+  "cover_url": "https://example.com/albums/skytour.jpg",
+  "release_date": "2019-07-20"
+}
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ MODEL 4: SONG (Bài hát)                                                   │
+└────────────────────────────────────────────────────────────────────────────┘
+
+MỤC ĐÍCH:
+Lưu trữ thông tin chi tiết của mỗi bài hát trong hệ thống.
+
+CẤU TRÚC DỮ LIỆU:
+┌─────────────────┬──────────────┬────────────┬──────────────────────────┐
+│ Trường          │ Kiểu dữ liệu │ Bắt buộc   │ Mô tả                    │
+├─────────────────┼──────────────┼────────────┼──────────────────────────┤
+│ id              │ INTEGER      │ PK, AI     │ ID tự động tăng          │
+│ title           │ VARCHAR(255) │ NN         │ Tên bài hát              │
+│ artist_id       │ INTEGER      │ FK, NN     │ ID nghệ sĩ               │
+│ album_id        │ INTEGER      │ FK, NULL   │ ID album (optional)      │
+│ audio_url       │ VARCHAR(512) │ NN         │ URL file nhạc MP3        │
+│ duration        │ INTEGER      │ NN         │ Độ dài (giây)            │
+│ cover_url       │ VARCHAR(512) │ NULL       │ URL ảnh bìa bài hát      │
+│ genre           │ VARCHAR(100) │ NULL       │ Thể loại nhạc            │
+│ lyrics          │ TEXT         │ NULL       │ Lời bài hát              │
+│ play_count      │ INTEGER      │ DEFAULT 0  │ Số lượt nghe             │
+│ created_at      │ DATETIME     │ DEFAULT NOW│ Thời gian tạo            │
+│ updated_at      │ DATETIME     │ DEFAULT NOW│ Thời gian cập nhật       │
+└─────────────────┴──────────────┴────────────┴──────────────────────────┘
+
+CHỈ SỐ (INDEXES):
+- idx_artist_id: Lấy tất cả bài hát của 1 nghệ sĩ
+- idx_album_id: Lấy tất cả bài hát trong 1 album
+- idx_title: Tìm kiếm bài hát theo tên
+- idx_genre: Filter bài hát theo thể loại
+
+VALIDATION:
+- Title không được rỗng
+- Duration phải > 0 (tính bằng giây)
+- Audio_url phải là URL hợp lệ
+- Genre phải thuộc danh sách thể loại được phép
+
+QUAN HỆ:
+- Song belongsTo Artist (1 bài hát thuộc 1 nghệ sĩ)
+- Song belongsTo Album (1 bài hát thuộc 1 album - optional)
+- Song belongsToMany Playlists (qua PlaylistSong)
+- Song hasMany Favorites (nhiều user có thể yêu thích)
+
+VÍ DỤ DỮ LIỆU:
+{
+  "id": 1,
+  "title": "Chạy Ngay Đi",
+  "artist_id": 1,
+  "album_id": 1,
+  "audio_url": "http://localhost:3000/uploads/songs/chayngaydi.mp3",
+  "duration": 240,
+  "cover_url": "http://localhost:3000/uploads/covers/chayngaydi.jpg",
+  "genre": "Pop",
+  "lyrics": "Chạy ngay đi...",
+  "play_count": 15000
+}
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ MODEL 5: PLAYLIST (Danh sách phát)                                        │
+└────────────────────────────────────────────────────────────────────────────┘
+
+MỤC ĐÍCH:
+Cho phép user tạo danh sách phát nhạc riêng của mình.
+
+CẤU TRÚC DỮ LIỆU:
+┌─────────────────┬──────────────┬────────────┬──────────────────────────┐
+│ Trường          │ Kiểu dữ liệu │ Bắt buộc   │ Mô tả                    │
+├─────────────────┼──────────────┼────────────┼──────────────────────────┤
+│ id              │ INTEGER      │ PK, AI     │ ID tự động tăng          │
+│ user_id         │ INTEGER      │ FK, NN     │ ID người tạo playlist    │
+│ name            │ VARCHAR(255) │ NN         │ Tên playlist             │
+│ description     │ TEXT         │ NULL       │ Mô tả playlist           │
+│ cover_url       │ VARCHAR(512) │ NULL       │ URL ảnh bìa              │
+│ is_public       │ BOOLEAN      │ DEFAULT 0  │ Công khai hay riêng tư   │
+│ created_at      │ DATETIME     │ DEFAULT NOW│ Thời gian tạo            │
+│ updated_at      │ DATETIME     │ DEFAULT NOW│ Thời gian cập nhật       │
+└─────────────────┴──────────────┴────────────┴──────────────────────────┘
+
+CHỈ SỐ (INDEXES):
+- idx_user_id: Lấy tất cả playlist của 1 user
+- idx_name: Tìm kiếm playlist theo tên
+
+VALIDATION:
+- Name không được rỗng
+- User_id phải tồn tại trong bảng users
+
+QUAN HỆ:
+- Playlist belongsTo User (1 playlist thuộc về 1 user)
+- Playlist belongsToMany Songs (qua PlaylistSong - 1 playlist có nhiều bài hát)
+
+VÍ DỤ DỮ LIỆU:
+{
+  "id": 1,
+  "user_id": 5,
+  "name": "Nhạc buồn của tôi",
+  "description": "Playlist cho những lúc cô đơn",
+  "cover_url": "http://localhost:3000/uploads/playlists/nhacbuon.jpg",
+  "is_public": false
+}
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ MODEL 6: PLAYLIST_SONG (Bảng trung gian)                                  │
+└────────────────────────────────────────────────────────────────────────────┘
+
+MỤC ĐÍCH:
+Bảng trung gian để lưu mối quan hệ nhiều-nhiều giữa Playlist và Song.
+
+CẤU TRÚC DỮ LIỆU:
+┌─────────────────┬──────────────┬────────────┬──────────────────────────┐
+│ Trường          │ Kiểu dữ liệu │ Bắt buộc   │ Mô tả                    │
+├─────────────────┼──────────────┼────────────┼──────────────────────────┤
+│ playlist_id     │ INTEGER      │ PK, FK     │ ID playlist              │
+│ song_id         │ INTEGER      │ PK, FK     │ ID bài hát               │
+│ position        │ INTEGER      │ NN         │ Vị trí trong playlist    │
+│ added_at        │ DATETIME     │ DEFAULT NOW│ Thời gian thêm vào       │
+└─────────────────┴──────────────┴────────────┴──────────────────────────┘
+
+KHÓA CHÍNH:
+- Composite primary key: (playlist_id, song_id)
+
+TÍNH NĂNG ĐẶC BIỆT:
+- Position cho phép sắp xếp thứ tự bài hát trong playlist
+- User có thể thêm cùng 1 bài hát vào nhiều playlist khác nhau
+- Hỗ trợ sắp xếp lại thứ tự (drag & drop)
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ MODEL 7: FAVORITE (Bài hát yêu thích)                                     │
+└────────────────────────────────────────────────────────────────────────────┘
+
+MỤC ĐÍCH:
+Lưu trữ danh sách bài hát mà user đánh dấu yêu thích.
+
+CẤU TRÚC DỮ LIỆU:
+┌─────────────────┬──────────────┬────────────┬──────────────────────────┐
+│ Trường          │ Kiểu dữ liệu │ Bắt buộc   │ Mô tả                    │
+├─────────────────┼──────────────┼────────────┼──────────────────────────┤
+│ user_id         │ INTEGER      │ PK, FK     │ ID người dùng            │
+│ song_id         │ INTEGER      │ PK, FK     │ ID bài hát               │
+│ created_at      │ DATETIME     │ DEFAULT NOW│ Thời gian yêu thích      │
+└─────────────────┴──────────────┴────────────┴──────────────────────────┘
+
+KHÓA CHÍNH:
+- Composite primary key: (user_id, song_id)
+
+CHỈ SỐ (INDEXES):
+- idx_user_id: Lấy tất cả bài hát yêu thích của 1 user
+- idx_song_id: Đếm số lượng user yêu thích 1 bài hát
+
+TÍNH NĂNG ĐẶC BIỆT:
+- Không có timestamps (chỉ có created_at)
+- Không cần position vì thường sort theo created_at (mới nhất trên đầu)
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ MODEL 8: REFRESH_TOKEN (Token làm mới)                                    │
+└────────────────────────────────────────────────────────────────────────────┘
+
+MỤC ĐÍCH:
+Quản lý refresh tokens để gia hạn access token mà không cần đăng nhập lại.
+
+CẤU TRÚC DỮ LIỆU:
+┌─────────────────┬──────────────┬────────────┬──────────────────────────┐
+│ Trường          │ Kiểu dữ liệu │ Bắt buộc   │ Mô tả                    │
+├─────────────────┼──────────────┼────────────┼──────────────────────────┤
+│ id              │ INTEGER      │ PK, AI     │ ID tự động tăng          │
+│ user_id         │ INTEGER      │ FK, NN     │ ID người dùng            │
+│ token           │ VARCHAR(512) │ UNIQUE, NN │ Refresh token (hash)     │
+│ expires_at      │ DATETIME     │ NN         │ Thời gian hết hạn        │
+│ created_at      │ DATETIME     │ DEFAULT NOW│ Thời gian tạo            │
+└─────────────────┴──────────────┴────────────┴──────────────────────────┘
+
+TÍNH NĂNG BẢO MẬT:
+- Token được hash trước khi lưu vào database
+- Có thời gian hết hạn (thường 7-30 ngày)
+- Hỗ trợ revoke token (xóa khỏi database khi logout)
+
+
+================================================================================
+                   PHẦN III: QUAN HỆ GIỮA CÁC MODELS
+================================================================================
+
+SƠ ĐỒ QUAN HỆ (ER Diagram):
+
+        ┌─────────┐
+        │  USER   │
+        └────┬────┘
+             │
+             │ 1:N
+             │
+      ┌──────┴────────┬──────────────┐
+      │               │              │
+      ↓               ↓              ↓
+┌──────────┐   ┌──────────┐   ┌──────────┐
+│PLAYLIST  │   │FAVORITE  │   │  TOKEN   │
+└────┬─────┘   └────┬─────┘   └──────────┘
+     │              │
+     │ N:M          │ N:M
+     │              │
+     │    ┌─────────┴─────┐
+     └───→│     SONG      │←──────┐
+          └───┬───────┬───┘       │
+              │       │           │
+              ↓       ↓           │ N:1
+           ┌──────┐ ┌──────┐     │
+           │ARTIST│ │ALBUM │─────┘
+           └──────┘ └──┬───┘
+                       │
+                       └──→ ARTIST (N:1)
+
+CHI TIẾT QUAN HỆ:
+
+1. User ←→ Playlist (1:N)
+   - Một user có thể tạo nhiều playlist
+   - Một playlist chỉ thuộc về một user
+   - Foreign key: playlists.user_id → users.id
+
+2. User ←→ Favorite ←→ Song (N:M)
+   - Một user có thể yêu thích nhiều bài hát
+   - Một bài hát có thể được nhiều user yêu thích
+   - Bảng trung gian: favorites
+
+3. Playlist ←→ PlaylistSong ←→ Song (N:M)
+   - Một playlist chứa nhiều bài hát
+   - Một bài hát có thể có trong nhiều playlist
+   - Bảng trung gian: playlist_songs (có thêm field position)
+
+4. Artist ←→ Song (1:N)
+   - Một nghệ sĩ có nhiều bài hát
+   - Một bài hát thuộc về một nghệ sĩ
+   - Foreign key: songs.artist_id → artists.id
+
+5. Artist ←→ Album (1:N)
+   - Một nghệ sĩ có nhiều album
+   - Một album thuộc về một nghệ sĩ
+   - Foreign key: albums.artist_id → artists.id
+
+6. Album ←→ Song (1:N - Optional)
+   - Một album chứa nhiều bài hát
+   - Một bài hát có thể thuộc hoặc không thuộc album nào
+   - Foreign key: songs.album_id → albums.id (nullable)
+
+7. User ←→ RefreshToken (1:N)
+   - Một user có thể có nhiều refresh token (nhiều thiết bị)
+   - Một token thuộc về một user
+   - Foreign key: refresh_tokens.user_id → users.id
+
+
+================================================================================
+                      PHẦN IV: API ENDPOINTS
+================================================================================
+
+BASE URL: http://localhost:3000/api
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ AUTHENTICATION APIs                                                        │
+└────────────────────────────────────────────────────────────────────────────┘
+
+1. ĐĂNG KÝ TÀI KHOẢN
+   POST /api/auth/register
+   
+   Request Body:
+   {
+     "email": "user@example.com",
+     "password": "password123",
+     "display_name": "Nguyễn Văn A"
+   }
+   
+   Response (201 Created):
+   {
+     "user": {
+       "id": 1,
+       "email": "user@example.com",
+       "display_name": "Nguyễn Văn A"
+     },
+     "accessToken": "eyJhbGc...",
+     "refreshToken": "eyJhbGc..."
+   }
+
+2. ĐĂNG NHẬP
+   POST /api/auth/login
+   
+   Request Body:
+   {
+     "email": "user@example.com",
+     "password": "password123"
+   }
+   
+   Response (200 OK):
+   {
+     "user": { ... },
+     "accessToken": "eyJhbGc...",
+     "refreshToken": "eyJhbGc..."
+   }
+
+3. LÀM MỚI TOKEN
+   POST /api/auth/refresh
+   
+   Request Body:
+   {
+     "refreshToken": "eyJhbGc..."
+   }
+   
+   Response (200 OK):
+   {
+     "accessToken": "eyJhbGc...",
+     "refreshToken": "eyJhbGc..."
+   }
+
+4. LẤY THÔNG TIN USER HIỆN TẠI
+   GET /api/auth/me
+   Headers: Authorization: Bearer <accessToken>
+   
+   Response (200 OK):
+   {
+     "id": 1,
+     "email": "user@example.com",
+     "display_name": "Nguyễn Văn A",
+     "avatar_url": "..."
+   }
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ SONGS APIs                                                                 │
+└────────────────────────────────────────────────────────────────────────────┘
+
+1. LẤY DANH SÁCH BÀI HÁT
+   GET /api/songs
+   Query params:
+   - search: tìm kiếm theo tên (optional)
+   - genre: filter theo thể loại (optional)
+   - artist_id: filter theo nghệ sĩ (optional)
+   - page: trang hiện tại (default: 1)
+   - limit: số lượng mỗi trang (default: 20)
+   
+   Response (200 OK):
+   {
+     "data": [
+       {
+         "id": 1,
+         "title": "Chạy Ngay Đi",
+         "artist": { "id": 1, "name": "Sơn Tùng M-TP" },
+         "album": { "id": 1, "title": "Sky Tour" },
+         "audio_url": "http://...",
+         "duration": 240,
+         "cover_url": "http://...",
+         "genre": "Pop",
+         "play_count": 15000
+       }
+     ],
+     "pagination": {
+       "page": 1,
+       "limit": 20,
+       "total": 100,
+       "totalPages": 5
+     }
+   }
+
+2. LẤY CHI TIẾT BÀI HÁT
+   GET /api/songs/:id
+   
+   Response (200 OK):
+   {
+     "id": 1,
+     "title": "Chạy Ngay Đi",
+     "artist": { ... },
+     "album": { ... },
+     "audio_url": "http://...",
+     "duration": 240,
+     "cover_url": "http://...",
+     "genre": "Pop",
+     "lyrics": "Chạy ngay đi...",
+     "play_count": 15000
+   }
+
+3. TẠO BÀI HÁT MỚI (Protected - Admin only)
+   POST /api/songs
+   Headers: Authorization: Bearer <accessToken>
+   
+   Request Body:
+   {
+     "title": "Bài hát mới",
+     "artist_id": 1,
+     "album_id": 1,
+     "audio_url": "http://...",
+     "duration": 240,
+     "cover_url": "http://...",
+     "genre": "Pop",
+     "lyrics": "..."
+   }
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ PLAYLISTS APIs                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+1. LẤY DANH SÁCH PLAYLIST CỦA USER
+   GET /api/playlists
+   Headers: Authorization: Bearer <accessToken>
+   
+   Response (200 OK):
+   {
+     "data": [
+       {
+         "id": 1,
+         "name": "Nhạc buồn",
+         "description": "...",
+         "cover_url": "http://...",
+         "is_public": false,
+         "song_count": 15,
+         "created_at": "2024-01-01T00:00:00Z"
+       }
+     ]
+   }
+
+2. TẠO PLAYLIST MỚI
+   POST /api/playlists
+   Headers: Authorization: Bearer <accessToken>
+   
+   Request Body:
+   {
+     "name": "Playlist mới",
+     "description": "Mô tả",
+     "is_public": false
+   }
+
+3. THÊM BÀI HÁT VÀO PLAYLIST
+   POST /api/playlists/:id/songs
+   Headers: Authorization: Bearer <accessToken>
+   
+   Request Body:
+   {
+     "song_id": 5,
+     "position": 0
+   }
+
+4. XÓA BÀI HÁT KHỎI PLAYLIST
+   DELETE /api/playlists/:id/songs/:songId
+   Headers: Authorization: Bearer <accessToken>
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ FAVORITES APIs                                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+1. LẤY DANH SÁCH BÀI HÁT YÊU THÍCH
+   GET /api/favorites
+   Headers: Authorization: Bearer <accessToken>
+   
+   Response (200 OK):
+   {
+     "data": [
+       {
+         "song": { ... },
+         "added_at": "2024-01-01T00:00:00Z"
+       }
+     ]
+   }
+
+2. THÊM BÀI HÁT VÀO YÊU THÍCH
+   POST /api/favorites/:songId
+   Headers: Authorization: Bearer <accessToken>
+   
+   Response (201 Created):
+   {
+     "message": "Added to favorites",
+     "favorite": { ... }
+   }
+
+3. XÓA BÀI HÁT KHỎI YÊU THÍCH
+   DELETE /api/favorites/:songId
+   Headers: Authorization: Bearer <accessToken>
+   
+   Response (200 OK):
+   {
+     "message": "Removed from favorites"
+   }
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ ARTISTS & ALBUMS APIs                                                      │
+└────────────────────────────────────────────────────────────────────────────┘
+
+1. LẤY DANH SÁCH NGHỆ SĨ
+   GET /api/artists
+   
+2. LẤY CHI TIẾT NGHỆ SĨ
+   GET /api/artists/:id
+   
+3. LẤY DANH SÁCH ALBUM
+   GET /api/albums
+   
+4. LẤY CHI TIẾT ALBUM
+   GET /api/albums/:id
+
+
+================================================================================
+                     PHẦN V: KẾ HOẠCH KIỂM THỬ
+================================================================================
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ A. KIỂM THỬ BACKEND (Node.js API)                                         │
+└────────────────────────────────────────────────────────────────────────────┘
+
+I. KIỂM THỬ UNIT (Unit Testing)
+--------------------------------
+
+1. KIỂM THỬ MODELS
+   Kiểm tra các operations cơ bản trên database models bao gồm CRUD operations,
+   validations, constraints, và relationships giữa các tables.
+   
+   • User Model: Test tạo user với email unique, hash password bằng bcrypt, 
+     validate email format, reject duplicate emails, test update/delete operations
+   
+   • Song Model: Test tạo bài hát với foreign key constraints (artist_id, album_id),
+     validate duration > 0, test tự động tăng play_count, test search và filter 
+     theo genre
+   
+   • Playlist Model: Test tạo playlist với user_id hợp lệ, test cascade delete
+     (xóa playlist thì xóa playlist_songs nhưng giữ nguyên songs)
+   
+   • Favorite Model: Test thêm/xóa favorites, verify composite primary key 
+     (user_id, song_id) prevent duplicates
+   
+   • RefreshToken Model: Test tạo token với unique constraint, test xóa tokens
+     đã expired
+
+2. KIỂM THỬ MIDDLEWARE
+   Kiểm tra các middleware layers xử lý authentication, validation, và file uploads.
+   
+   • Authentication Middleware: Test JWT token verification - accept valid tokens,
+     reject missing/invalid/expired tokens, extract user info từ payload
+   
+   • Validation Middleware: Test input validation với express-validator - email
+     format, password length, required fields, sanitize HTML để prevent XSS
+   
+   • File Upload Middleware: Test Multer upload MP3 và images, validate MIME types,
+     enforce file size limits, generate unique filenames
+
+3. KIỂM THỬ INTEGRATION
+   Kiểm tra toàn bộ API flows từ request đến response qua tất cả layers.
+   
+   • Authentication Flow: Test register → login → refresh token → logout cycle,
+     verify tokens được tạo và lưu đúng, test password comparison với bcrypt
+   
+   • Songs API: Test GET với pagination, search với query string, filter theo
+     genre, test create/update/delete với proper authorization
+   
+   • Playlists API: Test create playlist (attach user_id từ JWT), add/remove songs,
+     verify ownership checks (user chỉ edit playlists của mình)
+   
+   • Favorites API: Test add to favorites, prevent duplicates, remove từ favorites
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ B. KIỂM THỬ ANDROID APP                                                   │
+└────────────────────────────────────────────────────────────────────────────┘
+
+I. KIỂM THỬ UNIT (Unit Testing)
+--------------------------------
+
+1. REPOSITORY LAYER
+   • Test AuthRepository: Mock ApiService, verify login/register calls, test
+     saveToken/getToken với DataStore
+   • Test SongRepository: Mock API responses, test parse DTOs thành domain models,
+     test caching với Room database
+   • Test PlaylistRepository: Test CRUD operations, verify error handling
+
+2. VIEWMODEL LAYER  
+   • Test AuthViewModel: Verify UI state updates (Loading → Success/Error),
+     test login/logout flows
+   • Test MusicViewModel: Test playSong() setup ExoPlayer, test pause/resume,
+     next/previous, shuffle/repeat modes
+   • Test PlaylistViewModel: Test createPlaylist() calls repository, updates LiveData
+
+3. INTEGRATION TESTING
+   • Authentication Flow: Test register → save tokens → navigate to Home, test
+     token refresh khi expired
+   • Music Playback: Test select song → ExoPlayer streams → UI updates, test
+     background playback
+   • Offline Mode: Test cache data với Room, test sync khi reconnect
+
+4. UI TESTING (Espresso)
+   • Login Screen: Test input validation, test login success navigates to Home,
+     test error messages display
+   • Home Screen: Test RecyclerView displays songs, test search functionality,
+     test click song opens player
+   • Player Screen: Test play/pause toggle, test seekbar, test next/previous buttons
+   • Playlist Screen: Test create playlist dialog, test add songs, test drag-to-reorder
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ C. KIỂM THỬ HIỆU NĂNG VÀ BẢO MẬT                                          │
+└────────────────────────────────────────────────────────────────────────────┘
+
+1. PERFORMANCE TESTING
+   • Load Testing: Test 100 concurrent users với Artillery/JMeter, verify response
+     time < 500ms, 0% error rate, database connections không exhausted
+   • Stress Testing: Tăng dần load để tìm breaking point, test với 10,000+ songs
+     trong database, verify indexes hoạt động đúng
+
+2. SECURITY TESTING
+   • SQL Injection: Test inject malicious SQL, verify Sequelize parameterized 
+     queries chặn được
+   • XSS Prevention: Test inject scripts trong inputs, verify express-validator
+     sanitize đúng
+   • Authentication: Test JWT tampering (modify payload), test password brute
+     force với rate limiting, test authorization (user A không access data của user B)
+
+3. DEVICE TESTING
+   • Compatibility: Test trên Android 8.0, 10, 12, 14 và nhiều screen sizes
+   • Network Conditions: Test trên WiFi, 4G, 3G, offline mode
+   • Battery: Test continuous playback 1 hour < 10% drain
+   • Rotation: Test config changes không làm mất state
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ D. CÔNG CỤ VÀ TIÊU CHÍ                                                     │
+└────────────────────────────────────────────────────────────────────────────┘
+
+CÔNG CỤ BACKEND:
+- Mocha/Jest + Chai: Unit testing framework
+- Supertest: HTTP assertions cho API testing  
+- Artillery/JMeter: Load testing
+- Postman: Manual testing
+
+CÔNG CỤ ANDROID:
+- JUnit + Mockito: Unit testing
+- Espresso: UI testing
+- Robolectric: Android components testing
+- LeakCanary: Memory leak detection
+
+TIÊU CHÍ CHẤP NHẬN:
+- Code Coverage: Backend ≥80%, Android ≥70%
+- Performance: API response <500ms, app startup <3s, playback latency <2s
+- Reliability: Uptime ≥99%, error rate <1%, crash rate <0.5%
+- Security: No SQL injection, no XSS, passwords encrypted, HTTPS enforced
+
+
+┌────────────────────────────────────────────────────────────────────────────┐
+│ E. DỰ KIẾN LỊCH TRÌNH KIỂM THỬ                                             │
+└────────────────────────────────────────────────────────────────────────────┘
+
+GIAI ĐOẠN 1: Setup Environment (2-3 ngày)
+   - Install testing frameworks
+   - Setup test database với mock data
+   - Config CI/CD pipeline
+
+GIAI ĐOẠN 2: Backend Testing (5-7 ngày)
+   - Unit tests: Models, middleware
+   - Integration tests: API endpoints
+   - Security testing
+
+GIAI ĐOẠN 3: Android Testing (6-8 ngày)
+   - Unit tests: Repositories, ViewModels
+   - UI tests với Espresso
+   - Device compatibility testing
+
+GIAI ĐOẠN 4: Integration Testing (3-4 ngày)
+   - End-to-end flows
+   - Offline mode testing
+   - Error handling
+
+GIAI ĐOẠN 5: Performance Testing (3-4 ngày)
+   - Load và stress testing
+   - Optimization
+
+GIAI ĐOẠN 6: User Acceptance Testing (5-7 ngày)
+   - Beta testing với real users
+   - Collect feedback và fix bugs
+
+TỔNG THỜI GIAN: 3-4 tuần
+
+
+================================================================================
+                      PHẦN VI: TỔNG KẾT VÀ ĐÁNH GIÁ
+================================================================================
+
+ĐIỂM MẠNH CỦA KIẾN TRÚC:
+-------------------------
+✓ Tách biệt rõ ràng giữa Frontend và Backend
+✓ RESTful API chuẩn, dễ mở rộng
+✓ Sử dụng ORM (Sequelize) giúp tránh SQL injection
+✓ JWT authentication bảo mật
+✓ Offline mode với Room database
+✓ Scalable architecture
+
+ĐIỂM CẦN CẢI THIỆN:
+-------------------
+⚠ Chưa có caching layer (Redis) cho API
+⚠ Chưa có CDN cho music files
+⚠ Chưa có rate limiting cho API
+⚠ Chưa có monitoring/logging system (Sentry, LogRocket)
+⚠ Chưa có automated backup cho database
+⚠ Chưa có CI/CD pipeline
+
+KHUYẾN NGHỊ:
+------------
+1. Implement Redis cache cho frequently accessed data
+2. Setup CDN (Cloudflare, AWS CloudFront) cho audio files
+3. Add rate limiting middleware (express-rate-limit)
+4. Integrate error tracking (Sentry)
+5. Setup automated database backups
+6. Implement CI/CD với GitHub Actions
+7. Add WebSocket cho real-time features (đang nghe gì, online users)
+8. Implement push notifications (FCM)
+
+================================================================================
+                              KẾT THÚC BÁO CÁO
+================================================================================
+
+Ngày lập báo cáo: 2026-04-07
+Người lập báo cáo: GitHub Copilot CLI
+Dự án: Cinder's Soul Music Streaming App
+
+Báo cáo này cung cấp tổng quan chi tiết về models, API endpoints, và kế hoạch
+kiểm thử toàn diện cho dự án. Vui lòng tham khảo và thực hiện theo các bước
+đã được đề xuất để đảm bảo chất lượng sản phẩm.
+
+================================================================================

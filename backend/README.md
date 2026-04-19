@@ -8,6 +8,7 @@ RESTful API backend for Cinder's Soul music streaming application.
 - **Framework**: Express.js
 - **Database**: MySQL
 - **Authentication**: JWT (JSON Web Tokens)
+- **Social Auth**: Google ID Token
 - **File Upload**: Multer
 
 ## Getting Started
@@ -63,7 +64,10 @@ backend/
 │   │   ├── upload.js    # File upload configuration
 │   │   └── validator.js
 │   ├── models/          # Database models
+│   ├── services/        # Business logic services
 │   ├── routes/          # API routes
+│   ├── utils/           # Shared helper utilities
+│   ├── validators/      # Route validation rules
 │   └── server.js        # App entry point
 ├── uploads/             # Uploaded files
 ├── .env.example         # Environment variables template
@@ -76,6 +80,7 @@ backend/
 ### Authentication
 - `POST /api/auth/register` - Register new user
 - `POST /api/auth/login` - Login user
+- `POST /api/auth/google` - Login/Register with Google ID token
 - `POST /api/auth/refresh` - Refresh access token
 - `GET /api/auth/me` - Get current user (protected)
 
@@ -127,7 +132,8 @@ backend/
 
 ## Environment Variables
 
-See `.env.example` for all available configuration options.
+Required for Google auth:
+- `GOOGLE_CLIENT_ID` - One or many Google OAuth client IDs (comma-separated if multiple).
 
 ## Development
 

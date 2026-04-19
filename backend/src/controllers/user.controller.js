@@ -27,8 +27,16 @@ exports.getUser = async (req, res, next) => {
 // Update user profile
 exports.updateUser = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = parseInt(req.params.id, 10);
     const { displayName, avatarUrl, currentPassword, newPassword } = req.body;
+
+    if (Number.isNaN(userId)) {
+      return next(new AppError('Invalid user ID', 400));
+    }
+
+    if (userId !== req.user.id) {
+      return next(new AppError('Access denied', 403));
+    }
 
     const user = await User.findByPk(userId);
 
@@ -83,7 +91,15 @@ exports.updateUser = async (req, res, next) => {
 // Delete user account
 exports.deleteUser = async (req, res, next) => {
   try {
-    const userId = req.user.id;
+    const userId = parseInt(req.params.id, 10);
+
+    if (Number.isNaN(userId)) {
+      return next(new AppError('Invalid user ID', 400));
+    }
+
+    if (userId !== req.user.id) {
+      return next(new AppError('Access denied', 403));
+    }
 
     const user = await User.findByPk(userId);
 
