@@ -1,22 +1,22 @@
 package com.example.cinderssoul.models
 
-import com.google.firebase.Timestamp
-
 data class Song(
-    val songId: String = "",
+    val id: Int,
     val title: String = "",
-    val artistId: String = "",
-    val artistName: String = "",
-    val albumId: String = "",
-    val albumName: String = "",
+    val artistId: Int,
+    val albumId: Int? = null,
     val duration: Int = 0, // in seconds
     val audioUrl: String = "",
-    val coverImageUrl: String = "",
-    val genre: List<String> = emptyList(),
-    val releaseDate: Timestamp? = null,
-    val playCount: Long = 0,
-    val likeCount: Long = 0,
-    val lyrics: String = "",
-    val createdAt: Timestamp? = null,
-    val updatedAt: Timestamp? = null
-)
+    val coverUrl: String? = null,
+    val genre: String? = null,
+    val playCount: Int = 0,
+    val lyrics: String? = null,
+    val artist: Artist? = null,
+    val album: Album? = null
+) {
+    val artistName: String
+        get() = artist?.name ?: "Unknown artist"
+
+    val albumTitle: String
+        get() = album?.title ?: "Single"
+}

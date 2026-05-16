@@ -10,11 +10,17 @@ exports.getAllSongs = async (req, res, next) => {
     const where = {};
     
     if (genre) {
-      where.genre = genre;
+      where.genre = { [Op.like]: `%${genre}%` };
     }
     
     if (search) {
-      where.title = { [Op.like]: `%${search}%` };
+      where[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { genre: { [Op.like]: `%${search}%` } },
+        { lyrics: { [Op.like]: `%${search}%` } },
+        { '$artist.name$': { [Op.like]: `%${search}%` } },
+        { '$album.title$': { [Op.like]: `%${search}%` } }
+      ];
     }
 
     const songs = await Song.findAll({
@@ -33,6 +39,7 @@ exports.getAllSongs = async (req, res, next) => {
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
+      subQuery: false,
       order: [['created_at', 'DESC']]
     });
 

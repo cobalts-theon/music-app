@@ -1,107 +1,185 @@
 package com.example.cinderssoul.repository
 
+import com.example.cinderssoul.models.Album
+import com.example.cinderssoul.models.Artist
 import com.example.cinderssoul.models.Song
-import com.google.firebase.firestore.FirebaseFirestore
-import com.google.firebase.firestore.Query
-import kotlinx.coroutines.tasks.await
+import com.example.cinderssoul.local.MusicCacheDao
+import com.example.cinderssoul.local.toCachedAlbumEntity
+import com.example.cinderssoul.local.toCachedArtistEntity
+import com.example.cinderssoul.local.toCachedSongEntity
+import com.example.cinderssoul.local.toDomainAlbum
+import com.example.cinderssoul.local.toDomainArtist
+import com.example.cinderssoul.local.toDomainSong
+import com.example.cinderssoul.network.ApiClient
+import com.example.cinderssoul.network.ApiEnvelope
+import com.example.cinderssoul.network.ApiService
+import com.example.cinderssoul.network.toDomainAlbum as toDomainAlbumFromApi
+import com.example.cinderssoul.network.toDomainArtist as toDomainArtistFromApi
+import com.example.cinderssoul.network.toDomainSong as toDomainSongFromApi
 
-open class SongRepository {
-    private val db by lazy { FirebaseFirestore.getInstance() }
-    private val songsCollection by lazy { db.collection("songs") }
+class SongRepository(
+    private val apiService: ApiService = ApiClient.apiService,
+    private val musicCacheDao: MusicCacheDao? = null
+) {
+    suspend fun getAllSongs(
+        search: String? = null,
+        genre: String? = null,
+        limit: Int = 50,
+        offset: Int = 0
+    ): Result<List<Song>> {
+        val normalizedSearch = search?.takeIf { it.isNotBlank() }
+        val normalizedGenre = genre?.takeIf { it.isNotBlank() }
 
-    // Get all songs
-    open suspend fun getAllSongs(): Result<List<Song>> {
-        return try {
-            val snapshot = songsCollection.get().await()
-            val songs = snapshot.toObjects(Song::class.java)
-            Result.success(songs)
-        } catch (e: Exception) {
-            Result.failure(e)
+        val apiResult = runCatching {
+            apiService.getSongs(
+                search = normalizedSearch,
+                genre = normalizedGenre,
+                limit = limit,
+                offset = offset
+            ).requireData().map { it.toDomainSongFromApi() }
+        }
+
+        return apiResult.fold(
+            onSuccess = { songs ->
+                cacheSongs(
+                    songs = songs,
+                    replaceCache = normalizedSearch == null && normalizedGenre == null && offset == 0
+                )
+                Result.success(songs)
+            },
+            onFailure = { apiError ->
+                fallbackToCachedSongs(
+                    apiError = apiError,
+                    search = normalizedSearch,
+                    genre = normalizedGenre,
+                    limit = limit,
+                    offset = offset
+                )
+            }
+        )
+    }
+
+    suspend fun getAllArtists(limit: Int = 30, offset: Int = 0): Result<List<Artist>> {
+        val apiResult = runCatching {
+            apiService.getArtists(limit = limit, offset = offset)
+                .requireData()
+                .map { it.toDomainArtistFromApi() }
+        }
+
+        return apiResult.fold(
+            onSuccess = { artists ->
+                cacheArtists(artists = artists, replaceCache = offset == 0)
+                Result.success(artists)
+            },
+            onFailure = { apiError ->
+                fallbackToCachedArtists(apiError = apiError, limit = limit, offset = offset)
+            }
+        )
+    }
+
+    suspend fun getAllAlbums(limit: Int = 30, offset: Int = 0): Result<List<Album>> {
+        val apiResult = runCatching {
+            apiService.getAlbums(limit = limit, offset = offset)
+                .requireData()
+                .map { it.toDomainAlbumFromApi() }
+        }
+
+        return apiResult.fold(
+            onSuccess = { albums ->
+                cacheAlbums(albums = albums, replaceCache = offset == 0)
+                Result.success(albums)
+            },
+            onFailure = { apiError ->
+                fallbackToCachedAlbums(apiError = apiError, limit = limit, offset = offset)
+            }
+        )
+    }
+
+    private suspend fun cacheSongs(songs: List<Song>, replaceCache: Boolean) {
+        val dao = musicCacheDao ?: return
+        val cachedAt = System.currentTimeMillis()
+        val entities = songs.map { it.toCachedSongEntity(cachedAt) }
+        if (replaceCache) {
+            dao.replaceSongs(entities)
+        } else {
+            dao.upsertSongs(entities)
         }
     }
 
-    // Get song by ID
-    open suspend fun getSongById(songId: String): Result<Song?> {
-        return try {
-            val document = songsCollection.document(songId).get().await()
-            val song = document.toObject(Song::class.java)
-            Result.success(song)
-        } catch (e: Exception) {
-            Result.failure(e)
+    private suspend fun fallbackToCachedSongs(
+        apiError: Throwable,
+        search: String?,
+        genre: String?,
+        limit: Int,
+        offset: Int
+    ): Result<List<Song>> {
+        val dao = musicCacheDao ?: return Result.failure(apiError)
+        return runCatching {
+            dao.getSongs(search = search, genre = genre, limit = limit, offset = offset)
+                .map { it.toDomainSong() }
+        }.fold(
+            onSuccess = { cachedSongs ->
+                if (cachedSongs.isNotEmpty()) Result.success(cachedSongs) else Result.failure(apiError)
+            },
+            onFailure = { cacheError -> Result.failure(cacheError) }
+        )
+    }
+
+    private suspend fun cacheArtists(artists: List<Artist>, replaceCache: Boolean) {
+        val dao = musicCacheDao ?: return
+        val cachedAt = System.currentTimeMillis()
+        val entities = artists.map { it.toCachedArtistEntity(cachedAt) }
+        if (replaceCache) {
+            dao.replaceArtists(entities)
+        } else {
+            dao.upsertArtists(entities)
         }
     }
 
-    // Get songs by artist
-    open suspend fun getSongsByArtist(artistId: String): Result<List<Song>> {
-        return try {
-            val snapshot = songsCollection
-                .whereEqualTo("artistId", artistId)
-                .get()
-                .await()
-            val songs = snapshot.toObjects(Song::class.java)
-            Result.success(songs)
-        } catch (e: Exception) {
-            Result.failure(e)
+    private suspend fun fallbackToCachedArtists(
+        apiError: Throwable,
+        limit: Int,
+        offset: Int
+    ): Result<List<Artist>> {
+        val dao = musicCacheDao ?: return Result.failure(apiError)
+        return runCatching {
+            dao.getArtists(limit = limit, offset = offset).map { it.toDomainArtist() }
+        }.fold(
+            onSuccess = { cachedArtists ->
+                if (cachedArtists.isNotEmpty()) Result.success(cachedArtists) else Result.failure(apiError)
+            },
+            onFailure = { cacheError -> Result.failure(cacheError) }
+        )
+    }
+
+    private suspend fun cacheAlbums(albums: List<Album>, replaceCache: Boolean) {
+        val dao = musicCacheDao ?: return
+        val cachedAt = System.currentTimeMillis()
+        val entities = albums.map { it.toCachedAlbumEntity(cachedAt) }
+        if (replaceCache) {
+            dao.replaceAlbums(entities)
+        } else {
+            dao.upsertAlbums(entities)
         }
     }
 
-    // Get songs by album
-    open suspend fun getSongsByAlbum(albumId: String): Result<List<Song>> {
-        return try {
-            val snapshot = songsCollection
-                .whereEqualTo("albumId", albumId)
-                .get()
-                .await()
-            val songs = snapshot.toObjects(Song::class.java)
-            Result.success(songs)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    private suspend fun fallbackToCachedAlbums(
+        apiError: Throwable,
+        limit: Int,
+        offset: Int
+    ): Result<List<Album>> {
+        val dao = musicCacheDao ?: return Result.failure(apiError)
+        return runCatching {
+            dao.getAlbums(limit = limit, offset = offset).map { it.toDomainAlbum() }
+        }.fold(
+            onSuccess = { cachedAlbums ->
+                if (cachedAlbums.isNotEmpty()) Result.success(cachedAlbums) else Result.failure(apiError)
+            },
+            onFailure = { cacheError -> Result.failure(cacheError) }
+        )
     }
+}
 
-    // Get popular songs
-    open suspend fun getPopularSongs(limit: Long = 20): Result<List<Song>> {
-        return try {
-            val snapshot = songsCollection
-                .orderBy("playCount", Query.Direction.DESCENDING)
-                .limit(limit)
-                .get()
-                .await()
-            val songs = snapshot.toObjects(Song::class.java)
-            Result.success(songs)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    // Search songs
-    open suspend fun searchSongs(query: String): Result<List<Song>> {
-        return try {
-            val snapshot = songsCollection
-                .orderBy("title")
-                .startAt(query)
-                .endAt(query + "\uf8ff")
-                .get()
-                .await()
-            val songs = snapshot.toObjects(Song::class.java)
-            Result.success(songs)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    // Update play count
-    open suspend fun incrementPlayCount(songId: String): Result<Unit> {
-        return try {
-            val docRef = songsCollection.document(songId)
-            db.runTransaction { transaction ->
-                val snapshot = transaction.get(docRef)
-                val currentCount = snapshot.getLong("playCount") ?: 0
-                transaction.update(docRef, "playCount", currentCount + 1)
-            }.await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+private fun <T> ApiEnvelope<T>.requireData(): T {
+    return data ?: throw IllegalStateException(message ?: "Backend returned no data")
 }

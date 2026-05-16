@@ -1,110 +1,76 @@
 package com.example.cinderssoul.repository
 
 import com.example.cinderssoul.models.Playlist
-import com.google.firebase.Timestamp
-import com.google.firebase.firestore.FieldValue
-import com.google.firebase.firestore.FirebaseFirestore
-import kotlinx.coroutines.tasks.await
+import com.example.cinderssoul.network.AddSongRequest
+import com.example.cinderssoul.network.ApiClient
+import com.example.cinderssoul.network.ApiEnvelope
+import com.example.cinderssoul.network.ApiService
+import com.example.cinderssoul.network.CreatePlaylistRequest
+import com.example.cinderssoul.network.UpdatePlaylistRequest
+import com.example.cinderssoul.network.toDomainPlaylist
 
-class PlaylistRepository {
-    private val db = FirebaseFirestore.getInstance()
-    private val playlistsCollection = db.collection("playlists")
+class PlaylistRepository(
+    private val apiService: ApiService = ApiClient.apiService
+) {
+    suspend fun getUserPlaylists(): Result<List<Playlist>> = runCatching {
+        apiService.getPlaylists()
+            .requireData()
+            .map { it.toDomainPlaylist() }
+    }
 
-    // Create playlist
-    suspend fun createPlaylist(playlist: Playlist): Result<String> {
-        return try {
-            val docRef = playlistsCollection.document()
-            val newPlaylist = playlist.copy(
-                playlistId = docRef.id,
-                createdAt = Timestamp.now(),
-                updatedAt = Timestamp.now()
+    suspend fun getPlaylistById(playlistId: Int): Result<Playlist> = runCatching {
+        apiService.getPlaylist(playlistId)
+            .requireData()
+            .toDomainPlaylist()
+    }
+
+    suspend fun createPlaylist(
+        name: String,
+        description: String? = null,
+        coverUrl: String? = null,
+        isPublic: Boolean = false
+    ): Result<Playlist> = runCatching {
+        apiService.createPlaylist(
+            CreatePlaylistRequest(
+                name = name,
+                description = description,
+                coverUrl = coverUrl,
+                isPublic = isPublic
             )
-            docRef.set(newPlaylist).await()
-            Result.success(docRef.id)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+        ).requireData().toDomainPlaylist()
     }
 
-    // Get user playlists
-    suspend fun getUserPlaylists(userId: String): Result<List<Playlist>> {
-        return try {
-            val snapshot = playlistsCollection
-                .whereEqualTo("userId", userId)
-                .get()
-                .await()
-            val playlists = snapshot.toObjects(Playlist::class.java)
-            Result.success(playlists)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun addSongToPlaylist(playlistId: Int, songId: Int): Result<Unit> = runCatching {
+        apiService.addSongToPlaylist(playlistId, AddSongRequest(songId))
     }
 
-    // Get playlist by ID
-    suspend fun getPlaylistById(playlistId: String): Result<Playlist?> {
-        return try {
-            val document = playlistsCollection.document(playlistId).get().await()
-            val playlist = document.toObject(Playlist::class.java)
-            Result.success(playlist)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun removeSongFromPlaylist(playlistId: Int, songId: Int): Result<Unit> = runCatching {
+        apiService.removeSongFromPlaylist(playlistId, songId)
     }
 
-    // Add song to playlist
-    suspend fun addSongToPlaylist(playlistId: String, songId: String): Result<Unit> {
-        return try {
-            val docRef = playlistsCollection.document(playlistId)
-            docRef.update(
-                mapOf(
-                    "songIds" to FieldValue.arrayUnion(songId),
-                    "songCount" to FieldValue.increment(1),
-                    "updatedAt" to Timestamp.now()
-                )
-            ).await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun updatePlaylist(
+        playlistId: Int,
+        name: String? = null,
+        description: String? = null,
+        coverUrl: String? = null,
+        isPublic: Boolean? = null
+    ): Result<Playlist> = runCatching {
+        apiService.updatePlaylist(
+            playlistId,
+            UpdatePlaylistRequest(
+                name = name,
+                description = description,
+                coverUrl = coverUrl,
+                isPublic = isPublic
+            )
+        ).requireData().toDomainPlaylist()
     }
 
-    // Remove song from playlist
-    suspend fun removeSongFromPlaylist(playlistId: String, songId: String): Result<Unit> {
-        return try {
-            val docRef = playlistsCollection.document(playlistId)
-            docRef.update(
-                mapOf(
-                    "songIds" to FieldValue.arrayRemove(songId),
-                    "songCount" to FieldValue.increment(-1),
-                    "updatedAt" to Timestamp.now()
-                )
-            ).await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
+    suspend fun deletePlaylist(playlistId: Int): Result<Unit> = runCatching {
+        apiService.deletePlaylist(playlistId)
     }
+}
 
-    // Update playlist
-    suspend fun updatePlaylist(playlistId: String, updates: Map<String, Any>): Result<Unit> {
-        return try {
-            val updatesWithTimestamp = updates.toMutableMap().apply {
-                put("updatedAt", Timestamp.now())
-            }
-            playlistsCollection.document(playlistId).update(updatesWithTimestamp).await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
-
-    // Delete playlist
-    suspend fun deletePlaylist(playlistId: String): Result<Unit> {
-        return try {
-            playlistsCollection.document(playlistId).delete().await()
-            Result.success(Unit)
-        } catch (e: Exception) {
-            Result.failure(e)
-        }
-    }
+private fun <T> ApiEnvelope<T>.requireData(): T {
+    return data ?: throw IllegalStateException(message ?: "Backend returned no data")
 }

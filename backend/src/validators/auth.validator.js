@@ -43,9 +43,34 @@ const googleValidation = [
   validate
 ];
 
+const forgotPasswordValidation = [
+  body('email')
+    .isEmail()
+    .withMessage('Please provide a valid email')
+    .normalizeEmail(),
+  validate
+];
+
+const resetPasswordValidation = [
+  body('email')
+    .isEmail()
+    .withMessage('Please provide a valid email')
+    .normalizeEmail(),
+  body('otp')
+    .trim()
+    .isLength({ min: 6, max: 6 })
+    .withMessage('OTP must be 6 digits'),
+  body('newPassword')
+    .isLength({ min: 6 })
+    .withMessage('Password must be at least 6 characters long'),
+  validate
+];
+
 module.exports = {
   registerValidation,
   loginValidation,
   refreshValidation,
-  googleValidation
+  googleValidation,
+  forgotPasswordValidation,
+  resetPasswordValidation
 };

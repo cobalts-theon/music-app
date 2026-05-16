@@ -14,7 +14,10 @@ exports.getAllAlbums = async (req, res, next) => {
     }
     
     if (search) {
-      where.title = { [Op.like]: `%${search}%` };
+      where[Op.or] = [
+        { title: { [Op.like]: `%${search}%` } },
+        { '$artist.name$': { [Op.like]: `%${search}%` } }
+      ];
     }
 
     const albums = await Album.findAll({
@@ -28,6 +31,7 @@ exports.getAllAlbums = async (req, res, next) => {
       ],
       limit: parseInt(limit),
       offset: parseInt(offset),
+      subQuery: false,
       order: [['release_date', 'DESC']]
     });
 

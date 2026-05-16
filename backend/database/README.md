@@ -75,16 +75,17 @@ You should see:
 3. **artists** - Music artists
 4. **albums** - Music albums
 5. **songs** - Individual songs with metadata
-6. **playlists** - User-created playlists
+6. **playlists** - User-created playlists, including `cover_url` for playlist art
 7. **playlist_songs** - Junction table for playlist-song relationships
-8. **favorites** - User favorite songs
+
+Favorite songs, listening history, and downloaded songs are stored offline in
+Android Room. They are intentionally not part of the MySQL schema.
 
 ### Relationships
 
 ```
 users
 ├─ playlists (one-to-many)
-├─ favorites (one-to-many)
 └─ refresh_tokens (one-to-many)
 
 artists
@@ -98,8 +99,7 @@ playlists
 └─ playlist_songs (one-to-many)
 
 songs
-├─ playlist_songs (one-to-many)
-└─ favorites (one-to-many)
+└─ playlist_songs (one-to-many)
 ```
 
 ## Common MySQL Commands

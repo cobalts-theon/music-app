@@ -10,7 +10,10 @@ exports.getAllArtists = async (req, res, next) => {
     const where = {};
     
     if (search) {
-      where.name = { [Op.like]: `%${search}%` };
+      where[Op.or] = [
+        { name: { [Op.like]: `%${search}%` } },
+        { bio: { [Op.like]: `%${search}%` } }
+      ];
     }
 
     const artists = await Artist.findAll({

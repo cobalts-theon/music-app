@@ -12,8 +12,10 @@ Tất cả các models được định nghĩa bằng Sequelize ORM cho MySQL da
 4. **Song** - Bài hát
 5. **Playlist** - Playlist của user
 6. **PlaylistSong** - Quan hệ giữa playlist và bài hát
-7. **Favorite** - Bài hát yêu thích của user
-8. **RefreshToken** - JWT refresh tokens
+7. **RefreshToken** - JWT refresh tokens
+
+Bài hát yêu thích, lịch sử nghe và nhạc đã tải được lưu offline bằng Android
+Room, không tạo bảng Sequelize/MySQL.
 
 ## Cách sử dụng
 
@@ -26,8 +28,9 @@ const {
   Artist, 
   Album, 
   Song, 
-  Playlist, 
-  Favorite 
+  Playlist,
+  PlaylistSong,
+  RefreshToken
 } = require('./models');
 
 // Hoặc import riêng lẻ
@@ -161,27 +164,7 @@ const song = await Song.findByPk(5);
 await playlist.addSong(song, { through: { position: 1 } });
 ```
 
-#### 7. Thêm bài hát yêu thích
-
-```javascript
-const { Favorite } = require('./models');
-
-// Thêm favorite
-await Favorite.create({
-  user_id: 1,
-  song_id: 5
-});
-
-// Xóa favorite
-await Favorite.destroy({
-  where: {
-    user_id: 1,
-    song_id: 5
-  }
-});
-```
-
-#### 8. Search và Filter
+#### 7. Search và Filter
 
 ```javascript
 const { Op } = require('sequelize');
@@ -228,7 +211,6 @@ const albumCount = await artist.countAlbums();
 ```
 User
 ├── hasMany Playlist (user.playlists)
-├── hasMany Favorite (user.favorites)
 └── hasMany RefreshToken (user.refreshTokens)
 
 Artist
@@ -242,8 +224,7 @@ Album
 Song
 ├── belongsTo Artist (song.artist)
 ├── belongsTo Album (song.album)
-├── belongsToMany Playlist through PlaylistSong (song.playlists)
-└── hasMany Favorite (song.favorites)
+└── belongsToMany Playlist through PlaylistSong (song.playlists)
 
 Playlist
 ├── belongsTo User (playlist.user)

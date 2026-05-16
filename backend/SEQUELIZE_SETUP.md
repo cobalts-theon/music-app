@@ -16,7 +16,6 @@ backend/src/
     ├── Song.js             # Song model
     ├── Playlist.js         # Playlist model
     ├── PlaylistSong.js     # Junction table (Playlist ↔ Song)
-    ├── Favorite.js         # User favorites
     ├── RefreshToken.js     # JWT refresh tokens
     └── README.md           # Documentation & usage examples
 ```
@@ -104,7 +103,8 @@ const songs = await Song.findAll({
 
 ### User Model
 - Fields: id, email, password_hash, display_name, avatar_url
-- Relations: hasMany Playlist, hasMany Favorite
+- Relations: hasMany Playlist, hasMany RefreshToken
+- Offline personal data: favorites, listening history, and downloads are stored with Android Room
 
 ### Artist Model  
 - Fields: id, name, bio, avatar_url

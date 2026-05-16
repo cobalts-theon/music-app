@@ -68,16 +68,7 @@ All controllers have been successfully updated to use Sequelize ORM instead of r
 - Auto position management
 - Duplicate song prevention
 
-### 6. **favorite.controller.js** ✅
-- ✅ `getFavorites` - Get user favorite songs
-- ✅ `addFavorite` - Add song to favorites
-- ✅ `removeFavorite` - Remove from favorites
-
-**Features:**
-- Includes song details with artist
-- Duplicate prevention
-
-### 7. **user.controller.js** ✅
+### 6. **user.controller.js** ✅
 - ✅ `getUser` - Get user profile
 - ✅ `updateUser` - Update profile (name, avatar, password)
 - ✅ `deleteUser` - Delete account
@@ -86,7 +77,7 @@ All controllers have been successfully updated to use Sequelize ORM instead of r
 - Password change with verification
 - Profile update
 
-### 8. **upload.controller.js** ⏭️
+### 7. **upload.controller.js** ⏭️
 - No changes needed (file upload logic)
 
 ## 🎯 Key Features Implemented
@@ -108,7 +99,7 @@ All controllers have been successfully updated to use Sequelize ORM instead of r
 ### ✅ Security & Validation
 - ✅ Input validation
 - ✅ User authentication checks
-- ✅ Access control (playlists, favorites)
+- ✅ Access control (playlists)
 - ✅ Password hashing with bcrypt
 - ✅ JWT token management
 - ✅ Duplicate prevention
@@ -160,12 +151,10 @@ POST   /api/playlists/:id/songs      - Add song
 DELETE /api/playlists/:id/songs/:songId - Remove song
 ```
 
-### Favorites
-```
-GET    /api/favorites          - Get favorites
-POST   /api/favorites          - Add favorite
-DELETE /api/favorites/:songId  - Remove favorite
-```
+### Offline Personal Data
+Favorites, listening history, and downloaded songs are stored on device with Room.
+The backend no longer exposes `/api/favorites`.
+
 
 ### Auth
 ```
@@ -206,7 +195,6 @@ backend/src/controllers/
 ├── artist.controller.js      ✅ Updated
 ├── album.controller.js       ✅ Updated
 ├── playlist.controller.js    ✅ Updated
-├── favorite.controller.js    ✅ Updated
 ├── user.controller.js        ✅ Updated
 └── upload.controller.js      ⏭️ No changes
 ```

@@ -35,7 +35,7 @@ INSERT INTO `songs` (`title`, `artist_id`, `album_id`, `audio_url`, `duration`, 
 
 -- Insert sample playlists (for user_id = 1)
 INSERT INTO `playlists` (`user_id`, `name`, `description`, `is_public`) VALUES
-(1, 'My Favorites', 'My all-time favorite songs', TRUE),
+(1, 'Daily Mix', 'A reusable server playlist with editable cover art', TRUE),
 (1, 'Workout Mix', 'High energy songs for workout', TRUE),
 (2, 'Chill Vibes', 'Relaxing music for studying', FALSE);
 
@@ -48,12 +48,3 @@ INSERT INTO `playlist_songs` (`playlist_id`, `song_id`, `position`) VALUES
 (2, 7, 2),
 (3, 5, 1),
 (3, 6, 2);
-
--- Insert sample favorites (for user_id = 1)
-INSERT INTO `favorites` (`user_id`, `song_id`) VALUES
-(1, 1),
-(1, 3),
-(1, 4),
-(1, 6),
-(2, 1),
-(2, 5);

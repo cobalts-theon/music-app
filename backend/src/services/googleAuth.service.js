@@ -4,10 +4,10 @@ const { AppError } = require('../middleware/errorHandler');
 const client = new OAuth2Client();
 
 const getGoogleAudience = () => {
-  const clientId = process.env.GOOGLE_CLIENT_ID;
+  const clientId = process.env.GOOGLE_CLIENT_ID || process.env.GOOGLE_SERVER_CLIENT_ID;
 
   if (!clientId) {
-    throw new AppError('Google auth is not configured. Missing GOOGLE_CLIENT_ID.', 500);
+    throw new AppError('Google auth is not configured. Missing GOOGLE_CLIENT_ID or GOOGLE_SERVER_CLIENT_ID.', 500);
   }
 
   const audiences = clientId
@@ -16,7 +16,7 @@ const getGoogleAudience = () => {
     .filter(Boolean);
 
   if (!audiences.length) {
-    throw new AppError('Google auth is not configured. Invalid GOOGLE_CLIENT_ID.', 500);
+    throw new AppError('Google auth is not configured. Invalid GOOGLE_CLIENT_ID/GOOGLE_SERVER_CLIENT_ID.', 500);
   }
 
   return audiences;

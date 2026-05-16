@@ -42,17 +42,17 @@ const getJwtRefreshSecret = () => {
 const generateAccessToken = (userId, email) => jwt.sign(
   { id: userId, email },
   getJwtSecret(),
-  { expiresIn: process.env.JWT_EXPIRES_IN || '1h' }
+  { expiresIn: process.env.JWT_EXPIRES_IN || '30d' }
 );
 
 const generateRefreshToken = (userId, email) => jwt.sign(
   { id: userId, email },
   getJwtRefreshSecret(),
-  { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '7d' }
+  { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '90d' }
 );
 
 const getRefreshTokenExpiresAt = () => {
-  const refreshExpiry = process.env.JWT_REFRESH_EXPIRES_IN || '7d';
+  const refreshExpiry = process.env.JWT_REFRESH_EXPIRES_IN || '90d';
   return new Date(Date.now() + parseDurationToMs(refreshExpiry));
 };
 

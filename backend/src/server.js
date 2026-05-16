@@ -25,7 +25,6 @@ app.use('/api/songs', require('./routes/song.routes'));
 app.use('/api/playlists', require('./routes/playlist.routes'));
 app.use('/api/albums', require('./routes/album.routes'));
 app.use('/api/artists', require('./routes/artist.routes'));
-app.use('/api/favorites', require('./routes/favorite.routes'));
 app.use('/api/upload', require('./routes/upload.routes'));
 
 // Health check

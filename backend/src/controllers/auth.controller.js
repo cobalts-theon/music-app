@@ -74,3 +74,33 @@ exports.getMe = async (req, res, next) => {
     next(error);
   }
 };
+
+// Request password reset OTP
+exports.requestPasswordResetOtp = async (req, res, next) => {
+  try {
+    const data = await authService.requestPasswordResetOtp(req.body);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset OTP sent',
+      data
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+// Reset password with OTP
+exports.resetPasswordWithOtp = async (req, res, next) => {
+  try {
+    const data = await authService.resetPasswordWithOtp(req.body);
+
+    res.status(200).json({
+      success: true,
+      message: 'Password reset successfully',
+      data
+    });
+  } catch (error) {
+    next(error);
+  }
+};

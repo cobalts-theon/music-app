@@ -11,6 +11,9 @@ const {
 const { toAuthUser, toProfileUser } = require('../utils/user');
 const { verifyGoogleIdToken } = require('./googleAuth.service');
 
+const RESET_OTP_TTL_MS = 10 * 60 * 1000;
+const resetOtpStore = new Map();
+
 const storeRefreshToken = async (userId, token) => {
   await RefreshToken.create({
     user_id: userId,
@@ -162,10 +165,78 @@ const getMe = async (userId) => {
   };
 };
 
+const requestPasswordResetOtp = async ({ email } = {}) => {
+  if (!email) {
+    throw new AppError('Email is required', 400);
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const user = await User.findOne({ where: { email: normalizedEmail } });
+  const otp = crypto.randomInt(100000, 1000000).toString();
+
+  if (user) {
+    const otpHash = await bcrypt.hash(otp, 10);
+    resetOtpStore.set(normalizedEmail, {
+      otpHash,
+      expiresAt: Date.now() + RESET_OTP_TTL_MS
+    });
+
+    console.log(`[auth] Password reset OTP for ${normalizedEmail}: ${otp}`);
+  }
+
+  const data = {
+    email: normalizedEmail,
+    otpExpiresInSeconds: RESET_OTP_TTL_MS / 1000
+  };
+
+  if (process.env.NODE_ENV !== 'production' && user) {
+    data.devOtp = otp;
+  }
+
+  return data;
+};
+
+const resetPasswordWithOtp = async ({ email, otp, newPassword } = {}) => {
+  if (!email || !otp || !newPassword) {
+    throw new AppError('Email, OTP, and new password are required', 400);
+  }
+
+  if (newPassword.length < 6) {
+    throw new AppError('Password must be at least 6 characters long', 400);
+  }
+
+  const normalizedEmail = email.toLowerCase().trim();
+  const resetRecord = resetOtpStore.get(normalizedEmail);
+
+  if (!resetRecord || resetRecord.expiresAt < Date.now()) {
+    resetOtpStore.delete(normalizedEmail);
+    throw new AppError('OTP is invalid or expired', 400);
+  }
+
+  const isOtpValid = await bcrypt.compare(otp.trim(), resetRecord.otpHash);
+  if (!isOtpValid) {
+    throw new AppError('OTP is invalid or expired', 400);
+  }
+
+  const user = await User.findOne({ where: { email: normalizedEmail } });
+  if (!user) {
+    resetOtpStore.delete(normalizedEmail);
+    throw new AppError('User not found', 404);
+  }
+
+  user.password_hash = await bcrypt.hash(newPassword, 10);
+  await user.save();
+  resetOtpStore.delete(normalizedEmail);
+
+  return issueAuthData(user);
+};
+
 module.exports = {
   registerWithEmail,
   loginWithEmail,
   loginOrRegisterWithGoogle,
   refreshAccessToken,
-  getMe
+  getMe,
+  requestPasswordResetOtp,
+  resetPasswordWithOtp
 };

@@ -119,10 +119,9 @@ backend/
 - `PUT /api/artists/:id` - Update artist (protected)
 - `DELETE /api/artists/:id` - Delete artist (protected)
 
-### Favorites
-- `GET /api/favorites` - Get user favorites (protected)
-- `POST /api/favorites/:songId` - Add to favorites (protected)
-- `DELETE /api/favorites/:songId` - Remove from favorites (protected)
+### Offline Personal Data
+Favorites, listening history, and downloaded songs are stored on device with Room.
+The server does not expose `/api/favorites`; playlist CRUD stays under `/api/playlists`.
 
 ### Upload
 - `POST /api/upload/image` - Upload image file (protected)
@@ -134,6 +133,7 @@ backend/
 
 Required for Google auth:
 - `GOOGLE_CLIENT_ID` - One or many Google OAuth client IDs (comma-separated if multiple).
+- `GOOGLE_SERVER_CLIENT_ID` - Fallback when `GOOGLE_CLIENT_ID` is not set.
 
 ## Development
 

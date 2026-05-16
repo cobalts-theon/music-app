@@ -1,43 +1,61 @@
 package com.example.cinderssoul.ui.theme
 
-import android.app.Activity
 import android.os.Build
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.dp
 
 private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
+    primary = Crimson,
+    onPrimary = Color.White,
+    secondary = Mist,
+    onSecondary = Ink,
+    tertiary = Silver,
+    background = Color(0xFF06090E),
+    onBackground = Mist,
+    surface = Color(0xFF0D141E),
+    onSurface = Mist,
+    surfaceVariant = Color(0xFF131D2B),
+    onSurfaceVariant = Mist.copy(alpha = 0.88f),
+    outline = Silver.copy(alpha = 0.45f)
 )
 
 private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
+    primary = Crimson,
     onPrimary = Color.White,
+    secondary = Ink,
     onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+    tertiary = Silver,
+    background = Parchment,
+    onBackground = Ink,
+    surface = Mist,
+    onSurface = Ink,
+    surfaceVariant = Silver,
+    onSurfaceVariant = Ink.copy(alpha = 0.85f),
+    outline = Silver
+)
+
+private val CindersSoulShapes = Shapes(
+    extraSmall = RoundedCornerShape(4.dp),
+    small = RoundedCornerShape(8.dp),
+    medium = RoundedCornerShape(12.dp),
+    large = RoundedCornerShape(16.dp),
+    extraLarge = RoundedCornerShape(20.dp)
 )
 
 @Composable
 fun CindersSoulTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
+    dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {
     val colorScheme = when {
@@ -53,6 +71,7 @@ fun CindersSoulTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = CindersSoulShapes,
         content = content
     )
 }

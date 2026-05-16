@@ -2,7 +2,6 @@
 -- This file contains actual artists and songs data
 
 -- Clear existing sample data
-DELETE FROM `favorites`;
 DELETE FROM `playlist_songs`;
 DELETE FROM `playlists`;
 DELETE FROM `songs`;
@@ -36,7 +35,7 @@ INSERT INTO `users` (`id`, `email`, `password_hash`, `display_name`, `avatar_url
 
 -- Insert sample playlists
 INSERT INTO `playlists` (`id`, `user_id`, `name`, `description`, `is_public`) VALUES
-(1, 1, 'My Favorites', 'My favorite Vietnamese and international songs', TRUE),
+(1, 1, 'Vietnamese Hits', 'Vietnamese and international songs synced from MySQL', TRUE),
 (2, 1, 'Electronic Vibes', 'Best electronic and future bass tracks', TRUE);
 
 -- Add songs to playlists
@@ -44,9 +43,3 @@ INSERT INTO `playlist_songs` (`playlist_id`, `song_id`, `position`) VALUES
 (1, 1, 1),
 (1, 2, 2),
 (2, 2, 1);
-
--- Add some favorites
-INSERT INTO `favorites` (`user_id`, `song_id`) VALUES
-(1, 1),
-(1, 2),
-(2, 1);

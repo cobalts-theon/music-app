@@ -1,5 +1,5 @@
 [versions]
-agp = "9.1.1"
+agp = "9.2.1"
 coreKtx = "1.18.0"
 junit = "4.13.2"
 junitVersion = "1.3.0"
@@ -7,7 +7,7 @@ espressoCore = "3.7.0"
 lifecycleRuntimeKtx = "2.10.0"
 activityCompose = "1.13.0"
 kotlin = "2.2.10"
-ksp = "2.1.0-1.0.29"
+ksp = "2.2.10-2.0.2"
 composeBom = "2024.09.00"
 # TODO: Remove Firebase versions
 # firebaseAuth = "24.0.1"
@@ -43,4 +43,3 @@ googleid = { group = "com.google.android.libraries.identity.googleid", name = "g
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
-

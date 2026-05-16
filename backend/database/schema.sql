@@ -2,7 +2,6 @@
 -- MySQL Database Schema for Music Streaming App
 
 -- Drop tables if exists (for clean migration)
-DROP TABLE IF EXISTS `favorites`;
 DROP TABLE IF EXISTS `playlist_songs`;
 DROP TABLE IF EXISTS `playlists`;
 DROP TABLE IF EXISTS `songs`;
@@ -98,6 +97,10 @@ CREATE TABLE `playlists` (
   INDEX `idx_name` (`name`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
+-- Offline-only personal library data:
+-- favorite songs, listening history, and downloaded songs are stored on device
+-- in Android Room, not in MySQL.
+
 -- Playlist songs junction table
 CREATE TABLE `playlist_songs` (
   `playlist_id` INT NOT NULL,
@@ -108,17 +111,5 @@ CREATE TABLE `playlist_songs` (
   FOREIGN KEY (`playlist_id`) REFERENCES `playlists`(`id`) ON DELETE CASCADE,
   FOREIGN KEY (`song_id`) REFERENCES `songs`(`id`) ON DELETE CASCADE,
   INDEX `idx_playlist_id` (`playlist_id`),
-  INDEX `idx_song_id` (`song_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
-
--- Favorites table
-CREATE TABLE `favorites` (
-  `user_id` INT NOT NULL,
-  `song_id` INT NOT NULL,
-  `created_at` TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  PRIMARY KEY (`user_id`, `song_id`),
-  FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON DELETE CASCADE,
-  FOREIGN KEY (`song_id`) REFERENCES `songs`(`id`) ON DELETE CASCADE,
-  INDEX `idx_user_id` (`user_id`),
   INDEX `idx_song_id` (`song_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

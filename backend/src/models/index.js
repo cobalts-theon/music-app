@@ -7,14 +7,12 @@ const Album = require('./Album');
 const Song = require('./Song');
 const Playlist = require('./Playlist');
 const PlaylistSong = require('./PlaylistSong');
-const Favorite = require('./Favorite');
 const RefreshToken = require('./RefreshToken');
 
 // Define relationships
 
 // User relationships
 User.hasMany(Playlist, { foreignKey: 'user_id', as: 'playlists' });
-User.hasMany(Favorite, { foreignKey: 'user_id', as: 'favorites' });
 User.hasMany(RefreshToken, { foreignKey: 'user_id', as: 'refreshTokens' });
 
 // Artist relationships
@@ -34,7 +32,6 @@ Song.belongsToMany(Playlist, {
   otherKey: 'playlist_id',
   as: 'playlists' 
 });
-Song.hasMany(Favorite, { foreignKey: 'song_id', as: 'favorites' });
 
 // Playlist relationships
 Playlist.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -44,10 +41,6 @@ Playlist.belongsToMany(Song, {
   otherKey: 'song_id',
   as: 'songs' 
 });
-
-// Favorite relationships
-Favorite.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
-Favorite.belongsTo(Song, { foreignKey: 'song_id', as: 'song' });
 
 // RefreshToken relationships
 RefreshToken.belongsTo(User, { foreignKey: 'user_id', as: 'user' });
@@ -74,7 +67,6 @@ module.exports = {
   Song,
   Playlist,
   PlaylistSong,
-  Favorite,
   RefreshToken,
   syncDatabase
 };
