@@ -10,6 +10,10 @@ const {
 } = require('../utils/token');
 const { toAuthUser, toProfileUser } = require('../utils/user');
 const { verifyGoogleIdToken } = require('./googleAuth.service');
+const {
+  sendPasswordResetOtpEmail,
+  sendWelcomeEmail
+} = require('./email.service');
 
 const RESET_OTP_TTL_MS = 10 * 60 * 1000;
 const resetOtpStore = new Map();
@@ -23,8 +27,8 @@ const storeRefreshToken = async (userId, token) => {
 };
 
 const issueAuthData = async (user) => {
-  const accessToken = generateAccessToken(user.id, user.email);
-  const refreshToken = generateRefreshToken(user.id, user.email);
+  const accessToken = generateAccessToken(user.id, user.email, user.role || 'user');
+  const refreshToken = generateRefreshToken(user.id, user.email, user.role || 'user');
 
   await storeRefreshToken(user.id, refreshToken);
 
@@ -35,16 +39,39 @@ const issueAuthData = async (user) => {
   };
 };
 
+const sendWelcomeNotification = async (user) => {
+  try {
+    await sendWelcomeEmail({
+      to: user.email,
+      displayName: user.display_name
+    });
+  } catch (error) {
+    console.error(`[mail] Failed to send welcome email to ${user.email}:`, error.message);
+  }
+};
+
 const registerWithEmail = async ({ email, password, displayName } = {}) => {
-  if (!email || !password || !displayName) {
-    throw new AppError('Email, password, and display name are required', 400);
+  if (!email) {
+    throw new AppError('Email is required', 400);
+  }
+
+  if (!password) {
+    throw new AppError('Password is required', 400);
+  }
+
+  if (!displayName) {
+    throw new AppError('Display name is required', 400);
+  }
+
+  if (password.length < 6) {
+    throw new AppError('Password must be at least 6 characters long', 400);
   }
 
   const normalizedEmail = email.toLowerCase().trim();
 
   const existingUser = await User.findOne({ where: { email: normalizedEmail } });
   if (existingUser) {
-    throw new AppError('Email already registered', 409);
+    throw new AppError('This email is already registered', 409);
   }
 
   const passwordHash = await bcrypt.hash(password, 10);
@@ -54,24 +81,30 @@ const registerWithEmail = async ({ email, password, displayName } = {}) => {
     display_name: displayName.trim()
   });
 
+  await sendWelcomeNotification(user);
+
   return issueAuthData(user);
 };
 
 const loginWithEmail = async ({ email, password } = {}) => {
-  if (!email || !password) {
-    throw new AppError('Email and password are required', 400);
+  if (!email) {
+    throw new AppError('Email is required', 400);
+  }
+
+  if (!password) {
+    throw new AppError('Password is required', 400);
   }
 
   const normalizedEmail = email.toLowerCase().trim();
 
   const user = await User.findOne({ where: { email: normalizedEmail } });
   if (!user) {
-    throw new AppError('Invalid email or password', 401);
+    throw new AppError('No account found with this email', 404);
   }
 
   const isPasswordValid = await bcrypt.compare(password, user.password_hash);
   if (!isPasswordValid) {
-    throw new AppError('Invalid email or password', 401);
+    throw new AppError('Incorrect password', 401);
   }
 
   return issueAuthData(user);
@@ -98,6 +131,7 @@ const loginOrRegisterWithGoogle = async ({ idToken } = {}) => {
     });
 
     isNewUser = true;
+    await sendWelcomeNotification(user);
   } else {
     let changed = false;
 
@@ -147,13 +181,17 @@ const refreshAccessToken = async (refreshToken) => {
   }
 
   return {
-    accessToken: generateAccessToken(tokenRecord.user_id, tokenRecord.user.email)
+    accessToken: generateAccessToken(
+      tokenRecord.user_id,
+      tokenRecord.user.email,
+      tokenRecord.user.role || 'user'
+    )
   };
 };
 
 const getMe = async (userId) => {
   const user = await User.findByPk(userId, {
-    attributes: ['id', 'email', 'display_name', 'avatar_url', 'created_at']
+    attributes: ['id', 'email', 'display_name', 'avatar_url', 'role', 'created_at']
   });
 
   if (!user) {
@@ -172,40 +210,63 @@ const requestPasswordResetOtp = async ({ email } = {}) => {
 
   const normalizedEmail = email.toLowerCase().trim();
   const user = await User.findOne({ where: { email: normalizedEmail } });
-  const otp = crypto.randomInt(100000, 1000000).toString();
-
-  if (user) {
-    const otpHash = await bcrypt.hash(otp, 10);
-    resetOtpStore.set(normalizedEmail, {
-      otpHash,
-      expiresAt: Date.now() + RESET_OTP_TTL_MS
-    });
-
-    console.log(`[auth] Password reset OTP for ${normalizedEmail}: ${otp}`);
+  if (!user) {
+    throw new AppError('No account found with this email', 404);
   }
 
-  const data = {
+  const otp = crypto.randomInt(100000, 1000000).toString();
+  const otpHash = await bcrypt.hash(otp, 10);
+
+  try {
+    await sendPasswordResetOtpEmail({
+      to: user.email,
+      displayName: user.display_name,
+      otp,
+      expiresInMinutes: RESET_OTP_TTL_MS / 60_000
+    });
+  } catch (error) {
+    console.error(`[mail] Failed to send password reset OTP to ${normalizedEmail}:`, error.message);
+    if (error instanceof AppError) {
+      throw error;
+    }
+    throw new AppError('Unable to send OTP email. Please try again later.', 502);
+  }
+
+  resetOtpStore.set(normalizedEmail, {
+    otpHash,
+    expiresAt: Date.now() + RESET_OTP_TTL_MS
+  });
+
+  return {
     email: normalizedEmail,
     otpExpiresInSeconds: RESET_OTP_TTL_MS / 1000
   };
-
-  if (process.env.NODE_ENV !== 'production' && user) {
-    data.devOtp = otp;
-  }
-
-  return data;
 };
 
 const resetPasswordWithOtp = async ({ email, otp, newPassword } = {}) => {
-  if (!email || !otp || !newPassword) {
-    throw new AppError('Email, OTP, and new password are required', 400);
+  if (!email) {
+    throw new AppError('Email is required', 400);
+  }
+
+  if (!otp) {
+    throw new AppError('OTP is required', 400);
+  }
+
+  if (!newPassword) {
+    throw new AppError('New password is required', 400);
   }
 
   if (newPassword.length < 6) {
-    throw new AppError('Password must be at least 6 characters long', 400);
+    throw new AppError('New password must be at least 6 characters long', 400);
   }
 
   const normalizedEmail = email.toLowerCase().trim();
+  const user = await User.findOne({ where: { email: normalizedEmail } });
+  if (!user) {
+    resetOtpStore.delete(normalizedEmail);
+    throw new AppError('No account found with this email', 404);
+  }
+
   const resetRecord = resetOtpStore.get(normalizedEmail);
 
   if (!resetRecord || resetRecord.expiresAt < Date.now()) {
@@ -216,12 +277,6 @@ const resetPasswordWithOtp = async ({ email, otp, newPassword } = {}) => {
   const isOtpValid = await bcrypt.compare(otp.trim(), resetRecord.otpHash);
   if (!isOtpValid) {
     throw new AppError('OTP is invalid or expired', 400);
-  }
-
-  const user = await User.findOne({ where: { email: normalizedEmail } });
-  if (!user) {
-    resetOtpStore.delete(normalizedEmail);
-    throw new AppError('User not found', 404);
   }
 
   user.password_hash = await bcrypt.hash(newPassword, 10);

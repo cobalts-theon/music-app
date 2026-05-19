@@ -1,4 +1,4 @@
-const { Playlist, Song, Artist, PlaylistSong } = require('../models');
+const { Playlist, Song, Artist, Album, PlaylistSong } = require('../models');
 const { AppError } = require('../middleware/errorHandler');
 
 // Get user playlists
@@ -12,12 +12,28 @@ exports.getUserPlaylists = async (req, res, next) => {
         {
           model: Song,
           as: 'songs',
-          attributes: ['id', 'title', 'duration', 'cover_url'],
+          attributes: [
+            'id',
+            'title',
+            'artist_id',
+            'album_id',
+            'audio_url',
+            'duration',
+            'cover_url',
+            'genre',
+            'lyrics',
+            'play_count'
+          ],
           include: [
             {
               model: Artist,
               as: 'artist',
-              attributes: ['id', 'name']
+              attributes: ['id', 'name', 'bio', 'avatar_url']
+            },
+            {
+              model: Album,
+              as: 'album',
+              attributes: ['id', 'title', 'artist_id', 'cover_url', 'release_date']
             }
           ],
           through: { attributes: ['position'] }
@@ -52,6 +68,11 @@ exports.getPlaylist = async (req, res, next) => {
               model: Artist,
               as: 'artist',
               attributes: ['id', 'name', 'avatar_url']
+            },
+            {
+              model: Album,
+              as: 'album',
+              attributes: ['id', 'title', 'artist_id', 'cover_url', 'release_date']
             }
           ],
           through: { attributes: ['position', 'added_at'] }

@@ -151,9 +151,16 @@ POST   /api/playlists/:id/songs      - Add song
 DELETE /api/playlists/:id/songs/:songId - Remove song
 ```
 
+### Library
+```
+GET    /api/library/songs          - Get saved library songs
+POST   /api/library/songs          - Save song to library
+DELETE /api/library/songs/:songId  - Remove song from library
+```
+
 ### Offline Personal Data
-Favorites, listening history, and downloaded songs are stored on device with Room.
-The backend no longer exposes `/api/favorites`.
+Listening history and downloaded songs are stored on device with Room.
+Saved/favorite library songs are stored in MySQL through `/api/library/songs`.
 
 
 ### Auth

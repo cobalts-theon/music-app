@@ -1,8 +1,10 @@
 package com.example.cinderssoul.ui.app
 
-import android.R
+import android.Manifest
+import android.app.Activity
 import android.content.Intent
-import androidx.activity.ComponentActivity
+import android.content.pm.PackageManager
+import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
@@ -27,24 +29,33 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
 import com.example.cinderssoul.ui.dialogs.AccountAuthDialog
+import com.example.cinderssoul.ui.dialogs.AddSongsToPlaylistDialog
 import com.example.cinderssoul.ui.dialogs.AddSongToPlaylistDialog
 import com.example.cinderssoul.AuthenticationActivity
+import com.example.cinderssoul.admin.AdminActivity
 import com.example.cinderssoul.ui.dialogs.CreatePlaylistDialog
 import com.example.cinderssoul.ui.browse.DiscoverTab
 import com.example.cinderssoul.ui.dialogs.EditPlaylistDialog
 import com.example.cinderssoul.ui.home.HomeTab
+import com.example.cinderssoul.ui.home.HomeCollectionDetailScreen
 import com.example.cinderssoul.LibraryTab
 import com.example.cinderssoul.MusicViewModel
 import com.example.cinderssoul.ui.player.NowPlayingScreen
@@ -61,10 +72,13 @@ import com.example.cinderssoul.ui.dialogs.requestGoogleIdToken
 import com.example.cinderssoul.ui.navigation.AppBottomBar
 import kotlinx.coroutines.launch
 
+internal val LocalBottomBarContentPadding = staticCompositionLocalOf { 0.dp }
+
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
 internal fun MusicApp(viewModel: MusicViewModel) {
     val context = LocalContext.current
+    val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
     var selectedTab by rememberSaveable { mutableStateOf(MusicTab.Home) }
     var showNowPlaying by rememberSaveable { mutableStateOf(false) }
@@ -74,23 +88,43 @@ internal fun MusicApp(viewModel: MusicViewModel) {
     var openedArtistId by rememberSaveable { mutableStateOf<Int?>(null) }
     var openedAlbumId by rememberSaveable { mutableStateOf<Int?>(null) }
     var openedGenreName by rememberSaveable { mutableStateOf<String?>(null) }
+    var openedHomeCollection by rememberSaveable { mutableStateOf<HomeCollection?>(null) }
+    var usePersonalLibraryForDetail by rememberSaveable { mutableStateOf(false) }
     var showCreatePlaylistDialog by rememberSaveable { mutableStateOf(false) }
     var showAccountDialog by rememberSaveable { mutableStateOf(false) }
     var pendingSongForPlaylist by remember { mutableStateOf<Song?>(null) }
+    var addSongsTargetPlaylistId by rememberSaveable { mutableStateOf<Int?>(null) }
     var playlistEditTargetId by rememberSaveable { mutableStateOf<Int?>(null) }
+    var bottomBarHeightPx by remember { mutableStateOf(0) }
+    var hasRequestedNotificationPermission by rememberSaveable { mutableStateOf(false) }
 
     val uiState by viewModel.uiState
     val nowPlayingSong = uiState.currentSong
+    val librarySongIds = (
+        uiState.playlists.flatMap { playlist -> playlist.songs.map { it.id } } +
+            uiState.downloadedSongIds
+        ).toSet()
+    val librarySongs = uiState.songs.filter { it.id in librarySongIds }
+    val libraryArtistIds = librarySongs.map { it.artistId }.toSet()
+    val libraryAlbumIds = librarySongs.mapNotNull { it.albumId }.toSet()
+    val libraryArtists = uiState.artists.filter { it.id in libraryArtistIds }
+    val libraryAlbums = uiState.albums.filter { it.id in libraryAlbumIds }
+    val detailSongs = if (usePersonalLibraryForDetail) librarySongs else uiState.songs
     val openedPlaylist = uiState.playlists.firstOrNull { it.id == openedPlaylistId }
     val openedArtist = uiState.artists.firstOrNull { it.id == openedArtistId }
     val openedAlbum = uiState.albums.firstOrNull { it.id == openedAlbumId }
-    val openedArtistSongs = openedArtist?.let { artist -> uiState.songs.filter { it.artistId == artist.id } } ?: emptyList()
-    val openedAlbumSongs = openedAlbum?.let { album -> uiState.songs.filter { it.albumId == album.id } } ?: emptyList()
+    val openedArtistSongs = openedArtist?.let { artist -> detailSongs.filter { it.artistId == artist.id } } ?: emptyList()
+    val openedAlbumSongs = openedAlbum?.let { album -> detailSongs.filter { it.albumId == album.id } } ?: emptyList()
     val openedGenreSongs = openedGenreName?.let { genre ->
-        uiState.songs.filter { it.genre.equals(genre, ignoreCase = true) }
+        detailSongs.filter { it.genre.equals(genre, ignoreCase = true) }
     } ?: emptyList()
     val playlistEditTarget = uiState.playlists.firstOrNull { it.id == playlistEditTargetId }
     val hasNowPlayingSong = nowPlayingSong != null
+    val bottomBarContentPadding = if (showNowPlaying) {
+        0.dp
+    } else {
+        with(density) { bottomBarHeightPx.toDp() }
+    }
     val libraryTopBarColors = TopAppBarDefaults.topAppBarColors(
         containerColor = Color.Black,
         scrolledContainerColor = Color.Black,
@@ -103,18 +137,46 @@ internal fun MusicApp(viewModel: MusicViewModel) {
     ) {
         viewModel.refreshAuthUser()
     }
-    val accountAction: () -> Unit = {
-        if (uiState.authUser == null) {
-            authActivityLauncher.launch(Intent(context, AuthenticationActivity::class.java))
-        } else {
-            selectedTab = MusicTab.Profile
-            activeLibrarySection = LibrarySection.Overview
-            openedPlaylistId = null
-            openedArtistId = null
-            openedAlbumId = null
-            openedGenreName = null
-            if (compactBottomBar) compactBottomBar = false
+    val notificationPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {
+        hasRequestedNotificationPermission = true
+    }
+    val openAuthenticationActivity: () -> Unit = {
+        authActivityLauncher.launch(Intent(context, AuthenticationActivity::class.java))
+    }
+    val openAdminActivity: () -> Unit = {
+        context.startActivity(Intent(context, AdminActivity::class.java))
+    }
+    LaunchedEffect(uiState.authUser?.id, uiState.authUser?.role) {
+        if (uiState.authUser?.isAdmin == true) {
+            openAdminActivity()
+            (context as? Activity)?.finish()
         }
+    }
+    LaunchedEffect(uiState.isPlayerRunning) {
+        if (!uiState.isPlayerRunning) return@LaunchedEffect
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return@LaunchedEffect
+        if (hasRequestedNotificationPermission) return@LaunchedEffect
+        val permissionGranted = ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.POST_NOTIFICATIONS
+        ) == PackageManager.PERMISSION_GRANTED
+        if (!permissionGranted) {
+            hasRequestedNotificationPermission = true
+            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+    val accountAction: () -> Unit = {
+        selectedTab = MusicTab.Profile
+        activeLibrarySection = LibrarySection.Overview
+        openedPlaylistId = null
+        openedArtistId = null
+        openedAlbumId = null
+        openedGenreName = null
+        openedHomeCollection = null
+        usePersonalLibraryForDetail = false
+        if (compactBottomBar) compactBottomBar = false
     }
     val profileAvatarLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -130,12 +192,12 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                 }
         }
     }
-    val logoutAndOpenAuth: () -> Unit = {
+    val logoutToGuestMode: () -> Unit = {
         viewModel.logout()
         showAccountDialog = false
-        context.startActivity(Intent(context, AuthenticationActivity::class.java))
-        (context as? ComponentActivity)?.overridePendingTransition(R.anim.fade_in, R.anim.fade_out)
-        (context as? ComponentActivity)?.finish()
+        if (selectedTab == MusicTab.Profile) {
+            selectedTab = MusicTab.Home
+        }
     }
     fun clearLibraryDetailState() {
         activeLibrarySection = LibrarySection.Overview
@@ -143,6 +205,8 @@ internal fun MusicApp(viewModel: MusicViewModel) {
         openedArtistId = null
         openedAlbumId = null
         openedGenreName = null
+        openedHomeCollection = null
+        usePersonalLibraryForDetail = false
     }
     fun selectTab(tab: MusicTab) {
         selectedTab = tab
@@ -155,42 +219,74 @@ internal fun MusicApp(viewModel: MusicViewModel) {
         openedArtistId = null
         openedAlbumId = null
         openedGenreName = null
+        openedHomeCollection = null
         activeLibrarySection = LibrarySection.Playlists
+        usePersonalLibraryForDetail = true
         if (compactBottomBar) compactBottomBar = false
     }
-    fun openArtist(artist: Artist) {
-        selectedTab = MusicTab.Library
+    fun openArtist(artist: Artist, personalLibrary: Boolean) {
         openedArtistId = artist.id
         openedAlbumId = null
         openedGenreName = null
         openedPlaylistId = null
-        activeLibrarySection = LibrarySection.Artists
+        openedHomeCollection = null
+        if (personalLibrary) {
+            selectedTab = MusicTab.Library
+            activeLibrarySection = LibrarySection.Artists
+        }
+        usePersonalLibraryForDetail = personalLibrary
         if (compactBottomBar) compactBottomBar = false
     }
-    fun openAlbum(album: Album) {
-        selectedTab = MusicTab.Library
+    fun openAlbum(album: Album, personalLibrary: Boolean) {
         openedAlbumId = album.id
         openedArtistId = null
         openedGenreName = null
         openedPlaylistId = null
-        activeLibrarySection = LibrarySection.Albums
+        openedHomeCollection = null
+        if (personalLibrary) {
+            selectedTab = MusicTab.Library
+            activeLibrarySection = LibrarySection.Albums
+        }
+        usePersonalLibraryForDetail = personalLibrary
         if (compactBottomBar) compactBottomBar = false
     }
-    fun openGenre(genre: String) {
-        selectedTab = MusicTab.Library
+    fun openGenre(genre: String, personalLibrary: Boolean) {
         openedGenreName = genre
         openedArtistId = null
         openedAlbumId = null
         openedPlaylistId = null
-        activeLibrarySection = LibrarySection.Genres
+        openedHomeCollection = null
+        if (personalLibrary) {
+            selectedTab = MusicTab.Library
+            activeLibrarySection = LibrarySection.Genres
+        }
+        usePersonalLibraryForDetail = personalLibrary
         if (compactBottomBar) compactBottomBar = false
+    }
+    fun openHomeCollection(collection: HomeCollection) {
+        openedHomeCollection = collection
+        openedPlaylistId = null
+        openedArtistId = null
+        openedAlbumId = null
+        openedGenreName = null
+        usePersonalLibraryForDetail = false
+        if (compactBottomBar) compactBottomBar = false
+    }
+    fun closeDetailRoute() {
+        openedPlaylistId = null
+        openedArtistId = null
+        openedAlbumId = null
+        openedGenreName = null
+        openedHomeCollection = null
+        usePersonalLibraryForDetail = false
     }
     val contentRoute = when {
         showNowPlaying && nowPlayingSong != null -> MusicContentRoute.NowPlaying
-        selectedTab == MusicTab.Library && openedPlaylist != null -> MusicContentRoute.PlaylistDetail
-        selectedTab == MusicTab.Library && openedArtist != null -> MusicContentRoute.ArtistDetail
-        selectedTab == MusicTab.Library && openedAlbum != null -> MusicContentRoute.AlbumDetail
-        selectedTab == MusicTab.Library && !openedGenreName.isNullOrBlank() -> MusicContentRoute.GenreDetail
+        openedPlaylist != null -> MusicContentRoute.PlaylistDetail
+        openedArtist != null -> MusicContentRoute.ArtistDetail
+        openedAlbum != null -> MusicContentRoute.AlbumDetail
+        !openedGenreName.isNullOrBlank() -> MusicContentRoute.GenreDetail
+        openedHomeCollection != null -> MusicContentRoute.HomeCollectionDetail
         selectedTab == MusicTab.Home -> MusicContentRoute.Home
         selectedTab == MusicTab.Search -> MusicContentRoute.Search
         selectedTab == MusicTab.Discover -> MusicContentRoute.Discover
@@ -203,11 +299,11 @@ internal fun MusicApp(viewModel: MusicViewModel) {
         contentWindowInsets = WindowInsets(0.dp),
         topBar = {
             if (!showNowPlaying) {
-                if (selectedTab == MusicTab.Library && openedPlaylist != null) {
+                if (openedPlaylist != null) {
                     TopAppBar(
                         title = { Text(openedPlaylist.name, style = MaterialTheme.typography.headlineSmall) },
                         navigationIcon = {
-                            IconButton(onClick = { openedPlaylistId = null }) {
+                            IconButton(onClick = { closeDetailRoute() }) {
                                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                             }
                         },
@@ -219,11 +315,11 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                         },
                         colors = libraryTopBarColors
                     )
-                } else if (selectedTab == MusicTab.Library && openedArtist != null) {
+                } else if (openedArtist != null) {
                     TopAppBar(
                         title = { Text(openedArtist.name, style = MaterialTheme.typography.headlineSmall) },
                         navigationIcon = {
-                            IconButton(onClick = { openedArtistId = null }) {
+                            IconButton(onClick = { closeDetailRoute() }) {
                                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                             }
                         },
@@ -235,11 +331,11 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                         },
                         colors = libraryTopBarColors
                     )
-                } else if (selectedTab == MusicTab.Library && openedAlbum != null) {
+                } else if (openedAlbum != null) {
                     TopAppBar(
                         title = { Text(openedAlbum.title, style = MaterialTheme.typography.headlineSmall) },
                         navigationIcon = {
-                            IconButton(onClick = { openedAlbumId = null }) {
+                            IconButton(onClick = { closeDetailRoute() }) {
                                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                             }
                         },
@@ -251,11 +347,27 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                         },
                         colors = libraryTopBarColors
                     )
-                } else if (selectedTab == MusicTab.Library && !openedGenreName.isNullOrBlank()) {
+                } else if (!openedGenreName.isNullOrBlank()) {
                     TopAppBar(
                         title = { Text(openedGenreName.orEmpty(), style = MaterialTheme.typography.headlineSmall) },
                         navigationIcon = {
-                            IconButton(onClick = { openedGenreName = null }) {
+                            IconButton(onClick = { closeDetailRoute() }) {
+                                Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
+                            }
+                        },
+                        actions = {
+                            TopBarAccountAction(
+                                user = uiState.authUser,
+                                onClick = accountAction
+                            )
+                        },
+                        colors = libraryTopBarColors
+                    )
+                } else if (openedHomeCollection != null) {
+                    TopAppBar(
+                        title = { Text(openedHomeCollection?.title.orEmpty(), style = MaterialTheme.typography.headlineSmall) },
+                        navigationIcon = {
+                            IconButton(onClick = { closeDetailRoute() }) {
                                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                             }
                         },
@@ -271,7 +383,10 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                     TopAppBar(
                         title = { Text(activeLibrarySection.title) },
                         navigationIcon = {
-                            IconButton(onClick = { activeLibrarySection = LibrarySection.Overview }) {
+                            IconButton(onClick = {
+                                activeLibrarySection = LibrarySection.Overview
+                                usePersonalLibraryForDetail = false
+                            }) {
                                 Icon(Icons.AutoMirrored.Rounded.ArrowBack, contentDescription = "Back")
                             }
                         },
@@ -289,6 +404,8 @@ internal fun MusicApp(viewModel: MusicViewModel) {
     ) { paddingValues ->
         Box(modifier = Modifier.fillMaxSize()) {
             AnimatedContent(
+                modifier = Modifier
+                    .fillMaxSize(),
                 targetState = contentRoute,
                 transitionSpec = {
                     (fadeIn(animationSpec = tween(180)) +
@@ -300,7 +417,8 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                 },
                 label = "main-content"
             ) { route ->
-                when (route) {
+                CompositionLocalProvider(LocalBottomBarContentPadding provides bottomBarContentPadding) {
+                    when (route) {
                 MusicContentRoute.NowPlaying -> {
                     if (nowPlayingSong != null) {
                         NowPlayingScreen(
@@ -315,7 +433,8 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                             onVolumeChange = viewModel::setVolume,
                             onCycleRepeat = viewModel::cycleRepeatMode,
                             onToggleLike = viewModel::toggleCurrentSongLiked,
-                            onAddSongToPlaylist = { song -> pendingSongForPlaylist = song }
+                            onAddSongToPlaylist = { song -> pendingSongForPlaylist = song },
+                            onShareSong = viewModel::shareSong
                         )
                     }
                 }
@@ -326,9 +445,12 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                             modifier = Modifier.padding(paddingValues),
                             playlist = playlist,
                             onPlaySong = { viewModel.playOrToggleSong(it) },
+                            onAddSongs = { addSongsTargetPlaylistId = it.id },
                             onAddSongToPlaylist = { song -> pendingSongForPlaylist = song },
                             onDownloadSong = viewModel::downloadSong,
+                            onShareSong = viewModel::shareSong,
                             onEditPlaylist = { playlistEditTargetId = it.id },
+                            onSharePlaylist = { viewModel.sharePlaylist(it) },
                             onDownloadPlaylist = viewModel::downloadPlaylist,
                             onDeleteSong = { song ->
                                 viewModel.removeSongFromPlaylist(
@@ -362,6 +484,8 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                             onPlaySong = { viewModel.playOrToggleSong(it) },
                             onAddSongToPlaylist = { song -> pendingSongForPlaylist = song },
                             onDownloadSong = viewModel::downloadSong,
+                            onShareSong = viewModel::shareSong,
+                            onShareCollection = { viewModel.shareArtist(artist) },
                             onCollapseBottomBar = {
                                 if (!compactBottomBar) compactBottomBar = true
                             },
@@ -382,6 +506,8 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                             onPlaySong = { viewModel.playOrToggleSong(it) },
                             onAddSongToPlaylist = { song -> pendingSongForPlaylist = song },
                             onDownloadSong = viewModel::downloadSong,
+                            onShareSong = viewModel::shareSong,
+                            onShareCollection = { viewModel.shareAlbum(album) },
                             onCollapseBottomBar = {
                                 if (!compactBottomBar) compactBottomBar = true
                             },
@@ -401,9 +527,30 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                         onPlaySong = { viewModel.playOrToggleSong(it) },
                         onAddSongToPlaylist = { song -> pendingSongForPlaylist = song },
                         onDownloadSong = viewModel::downloadSong,
+                        onShareSong = viewModel::shareSong,
                         onCollapseBottomBar = { if (!compactBottomBar) compactBottomBar = true },
                         onExpandBottomBar = { if (compactBottomBar) compactBottomBar = false }
                     )
+                }
+
+                MusicContentRoute.HomeCollectionDetail -> {
+                    openedHomeCollection?.let { collection ->
+                        HomeCollectionDetailScreen(
+                            modifier = Modifier.padding(paddingValues),
+                            collection = collection,
+                            songs = uiState.songs,
+                            artists = uiState.artists,
+                            albums = uiState.albums,
+                            onPlaySong = { viewModel.playOrToggleSong(it) },
+                            onAddSongToPlaylist = { song -> pendingSongForPlaylist = song },
+                            onDownloadSong = viewModel::downloadSong,
+                            onShareSong = viewModel::shareSong,
+                            onArtistClick = { openArtist(it, personalLibrary = false) },
+                            onAlbumClick = { openAlbum(it, personalLibrary = false) },
+                            onCollapseBottomBar = { if (!compactBottomBar) compactBottomBar = true },
+                            onExpandBottomBar = { if (compactBottomBar) compactBottomBar = false }
+                        )
+                    }
                 }
 
                 MusicContentRoute.Home -> HomeTab(
@@ -414,8 +561,10 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                     onPlaySong = { viewModel.playOrToggleSong(it) },
                     onAddSongToPlaylist = { song -> pendingSongForPlaylist = song },
                     onDownloadSong = viewModel::downloadSong,
-                    onArtistClick = { openArtist(it) },
-                    onAlbumClick = { openAlbum(it) },
+                    onShareSong = viewModel::shareSong,
+                    onArtistClick = { openArtist(it, personalLibrary = false) },
+                    onAlbumClick = { openAlbum(it, personalLibrary = false) },
+                    onOpenCollection = { openHomeCollection(it) },
                     onAccountClick = accountAction,
                     onCollapseBottomBar = { if (!compactBottomBar) compactBottomBar = true },
                     onExpandBottomBar = { if (compactBottomBar) compactBottomBar = false }
@@ -432,9 +581,10 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                     onPlaySong = { viewModel.playOrToggleSong(it) },
                     onAddSongToPlaylist = { song -> pendingSongForPlaylist = song },
                     onDownloadSong = viewModel::downloadSong,
-                    onArtistClick = { openArtist(it) },
-                    onAlbumClick = { openAlbum(it) },
-                    onGenreClick = { openGenre(it) },
+                    onShareSong = viewModel::shareSong,
+                    onArtistClick = { openArtist(it, personalLibrary = false) },
+                    onAlbumClick = { openAlbum(it, personalLibrary = false) },
+                    onGenreClick = { openGenre(it, personalLibrary = false) },
                     onAccountClick = accountAction,
                     onCollapseBottomBar = { if (!compactBottomBar) compactBottomBar = true },
                     onExpandBottomBar = { if (compactBottomBar) compactBottomBar = false }
@@ -449,9 +599,10 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                     onPlaySong = { viewModel.playOrToggleSong(it) },
                     onAddSongToPlaylist = { song -> pendingSongForPlaylist = song },
                     onDownloadSong = viewModel::downloadSong,
-                    onArtistClick = { openArtist(it) },
-                    onAlbumClick = { openAlbum(it) },
-                    onGenreClick = { openGenre(it) },
+                    onShareSong = viewModel::shareSong,
+                    onArtistClick = { openArtist(it, personalLibrary = false) },
+                    onAlbumClick = { openAlbum(it, personalLibrary = false) },
+                    onGenreClick = { openGenre(it, personalLibrary = false) },
                     onAccountClick = accountAction,
                     onCollapseBottomBar = { if (!compactBottomBar) compactBottomBar = true },
                     onExpandBottomBar = { if (compactBottomBar) compactBottomBar = false }
@@ -460,25 +611,28 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                 MusicContentRoute.Library -> LibraryTab(
                     modifier = Modifier.padding(paddingValues),
                     activeSection = activeLibrarySection,
-                    albums = uiState.albums,
-                    artists = uiState.artists,
-                    songs = uiState.songs,
+                    albums = libraryAlbums,
+                    artists = libraryArtists,
+                    songs = librarySongs,
                     playlists = uiState.playlists,
                     downloadedSongIds = uiState.downloadedSongIds,
                     authUser = uiState.authUser,
                     onPlaySong = { viewModel.playOrToggleSong(it) },
                     onAddSongToPlaylist = { song -> pendingSongForPlaylist = song },
                     onDownloadSong = viewModel::downloadSong,
+                    onShareSong = viewModel::shareSong,
                     onPlaylistClick = { openPlaylist(it) },
-                    onArtistClick = { openArtist(it) },
-                    onAlbumClick = { openAlbum(it) },
-                    onGenreClick = { openGenre(it) },
+                    onArtistClick = { openArtist(it, personalLibrary = true) },
+                    onAlbumClick = { openAlbum(it, personalLibrary = true) },
+                    onGenreClick = { openGenre(it, personalLibrary = true) },
                     onSectionChange = {
                         activeLibrarySection = it
                         openedPlaylistId = null
                         openedArtistId = null
                         openedAlbumId = null
                         openedGenreName = null
+                        openedHomeCollection = null
+                        usePersonalLibraryForDetail = false
                     },
                     onCreatePlaylist = { showCreatePlaylistDialog = true },
                     onAccountClick = accountAction,
@@ -491,18 +645,23 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                     user = uiState.authUser,
                     isLoading = uiState.isAuthLoading,
                     message = uiState.authMessage,
-                    onLogin = accountAction,
+                    onLogin = openAuthenticationActivity,
                     onEditProfile = { showAccountDialog = true },
-                    onLogout = logoutAndOpenAuth,
+                    onOpenAdmin = openAdminActivity,
+                    onShareProfile = { viewModel.shareCurrentProfile() },
+                    onLogout = logoutToGuestMode,
                     onCollapseBottomBar = { if (!compactBottomBar) compactBottomBar = true },
                     onExpandBottomBar = { if (compactBottomBar) compactBottomBar = false }
                 )
+                    }
                 }
             }
 
             if (!showNowPlaying) {
                 AppBottomBar(
-                    modifier = Modifier.align(Alignment.BottomCenter),
+                    modifier = Modifier
+                        .align(Alignment.BottomCenter)
+                        .onSizeChanged { bottomBarHeightPx = it.height },
                     selectedTab = selectedTab,
                     compact = compactBottomBar && hasNowPlayingSong,
                     song = nowPlayingSong,
@@ -511,7 +670,7 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                     onPlayPause = viewModel::togglePlayback,
                     onNext = viewModel::playNextSong,
                     onTabSelected = { selectTab(it) },
-                    onExpand = { compactBottomBar = false }
+                    onExpand = { compactBottomBar = false },
                 )
             }
         }
@@ -531,6 +690,8 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                     openedArtistId = null
                     openedAlbumId = null
                     openedGenreName = null
+                    openedHomeCollection = null
+                    usePersonalLibraryForDetail = true
                     selectedTab = MusicTab.Library
                     activeLibrarySection = LibrarySection.Playlists
                 }
@@ -552,7 +713,25 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                 openedArtistId = null
                 openedAlbumId = null
                 openedGenreName = null
+                openedHomeCollection = null
+                usePersonalLibraryForDetail = true
                 activeLibrarySection = LibrarySection.Playlists
+            }
+        )
+    }
+
+    uiState.playlists.firstOrNull { it.id == addSongsTargetPlaylistId }?.let { playlist ->
+        AddSongsToPlaylistDialog(
+            playlist = playlist,
+            songs = uiState.songs,
+            onDismiss = { addSongsTargetPlaylistId = null },
+            onAddSong = { song ->
+                viewModel.addSongToPlaylist(song, playlist.id)
+                openedPlaylistId = playlist.id
+                openedHomeCollection = null
+                selectedTab = MusicTab.Library
+                activeLibrarySection = LibrarySection.Playlists
+                usePersonalLibraryForDetail = true
             }
         )
     }
@@ -573,7 +752,6 @@ internal fun MusicApp(viewModel: MusicViewModel) {
             user = uiState.authUser,
             isLoading = uiState.isAuthLoading,
             message = uiState.authMessage,
-            resetDevOtp = uiState.passwordResetDevOtp,
             onDismiss = {
                 viewModel.clearAuthMessage()
                 showAccountDialog = false
@@ -585,7 +763,7 @@ internal fun MusicApp(viewModel: MusicViewModel) {
             onResetPassword = viewModel::resetPasswordWithOtp,
             onUpdateProfile = viewModel::updateProfile,
             onChangeAvatar = { profileAvatarLauncher.launch("image/*") },
-            onLogout = logoutAndOpenAuth
+            onLogout = logoutToGuestMode
         )
     }
 }

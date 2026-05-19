@@ -9,8 +9,10 @@ const validate = (req, res, next) => {
       field: err.path,
       message: err.msg
     }));
-    
-    return next(new AppError(JSON.stringify(errorMessages), 400));
+
+    const error = new AppError(errorMessages[0]?.message || 'Validation failed', 400);
+    error.errors = errorMessages;
+    return next(error);
   }
   
   next();

@@ -1,6 +1,8 @@
 package com.example.cinderssoul.ui.browse
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.snapping.SnapPosition
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -17,12 +19,15 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -41,7 +46,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.cinderssoul.ui.components.AppleMusicPageHeader
-import com.example.cinderssoul.ui.components.BrowseCategoryTile
 import com.example.cinderssoul.ui.components.CircleCoverImage
 import com.example.cinderssoul.ui.components.DiscoverGenreTile
 import com.example.cinderssoul.ui.home.HomeHorizontalCardSection
@@ -60,6 +64,9 @@ import com.example.cinderssoul.models.Song
 import com.example.cinderssoul.models.User
 import com.example.cinderssoul.ui.app.AppleMusicRed
 import com.example.cinderssoul.ui.app.HomeCollapsedItemLimit
+import com.example.cinderssoul.ui.app.LocalBottomBarContentPadding
+
+private val SearchTextFieldShape = RoundedCornerShape(28.dp)
 
 @Composable
 internal fun SearchTab(
@@ -73,6 +80,7 @@ internal fun SearchTab(
     onPlaySong: (Song) -> Unit,
     onAddSongToPlaylist: (Song) -> Unit,
     onDownloadSong: (Song) -> Unit,
+    onShareSong: (Song) -> Unit,
     onArtistClick: (Artist) -> Unit,
     onAlbumClick: (Album) -> Unit,
     onGenreClick: (String) -> Unit,
@@ -81,6 +89,7 @@ internal fun SearchTab(
     onExpandBottomBar: () -> Unit
 ) {
     val listState = rememberLazyListState()
+    val bottomContentPadding = LocalBottomBarContentPadding.current + 15.dp
     val trimmedQuery = query.trim()
     val normalizedQuery = trimmedQuery.lowercase()
     val genreGroups = songs
@@ -186,7 +195,7 @@ internal fun SearchTab(
                 }
             },
             singleLine = true,
-            shape = MaterialTheme.shapes.large,
+            shape = SearchTextFieldShape,
             colors = OutlinedTextFieldDefaults.colors(
                 focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
                 unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.72f),
@@ -199,7 +208,7 @@ internal fun SearchTab(
         LazyColumn(
             modifier = Modifier.weight(1f),
             state = listState,
-            contentPadding = PaddingValues(bottom = 24.dp),
+            contentPadding = PaddingValues(bottom = bottomContentPadding),
             verticalArrangement = Arrangement.spacedBy(14.dp)
         ) {
             if (trimmedQuery.isBlank()) {
@@ -213,9 +222,10 @@ internal fun SearchTab(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         row.forEachIndexed { index, category ->
-                            BrowseCategoryTile(
+                            DiscoverGenreTile(
+                                modifier = Modifier.weight(1f),
                                 title = category.first,
-                                subtitle = "${category.second} songs",
+                                subtitle = itemCountText(category.second, "song"),
                                 colorIndex = index + rowIndex * 2,
                                 onClick = { onQueryChange(category.first) }
                             )
@@ -236,6 +246,7 @@ internal fun SearchTab(
                         onPlay = { onPlaySong(song) },
                         onAddToPlaylist = { onAddSongToPlaylist(song) },
                         onDownload = { onDownloadSong(song) },
+                        onShare = { onShareSong(song) },
                         showBackground = false
                     )
                 }
@@ -288,6 +299,7 @@ internal fun SearchTab(
                                 onPlay = { onPlaySong(song) },
                                 onAddToPlaylist = { onAddSongToPlaylist(song) },
                                 onDownload = { onDownloadSong(song) },
+                                onShare = { onShareSong(song) },
                                 showBackground = false
                             )
                         }
@@ -324,6 +336,7 @@ internal fun DiscoverTab(
     onPlaySong: (Song) -> Unit,
     onAddSongToPlaylist: (Song) -> Unit,
     onDownloadSong: (Song) -> Unit,
+    onShareSong: (Song) -> Unit,
     onArtistClick: (Artist) -> Unit,
     onAlbumClick: (Album) -> Unit,
     onGenreClick: (String) -> Unit,
@@ -332,6 +345,8 @@ internal fun DiscoverTab(
     onExpandBottomBar: () -> Unit
 ) {
     val listState = rememberLazyListState()
+    val genreRowState = rememberLazyListState()
+    val bottomContentPadding = LocalBottomBarContentPadding.current + 15.dp
     val genreGroups = songs
         .mapNotNull { it.genre?.trim()?.takeIf { value -> value.isNotBlank() } }
         .groupingBy { it }
@@ -364,7 +379,7 @@ internal fun DiscoverTab(
             .background(Color.Black)
             .padding(top = 2.dp),
         state = listState,
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = PaddingValues(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
@@ -382,6 +397,11 @@ internal fun DiscoverTab(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionTitle("Genres")
                     LazyRow(
+                        state = genreRowState,
+                        flingBehavior = rememberSnapFlingBehavior(
+                            lazyListState = genreRowState,
+                            snapPosition = SnapPosition.Start
+                        ),
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
@@ -406,8 +426,6 @@ internal fun DiscoverTab(
             HomeHorizontalCardSection(
                 title = "Albums",
                 items = albums.take(HomeCollapsedItemLimit),
-                expanded = true,
-                onToggleExpanded = {},
                 key = { index, album -> "discover-album-$index-${album.id}" }
             ) { album ->
                 val songsCount = songs.count { it.albumId == album.id }
@@ -424,8 +442,6 @@ internal fun DiscoverTab(
             HomeHorizontalCardSection(
                 title = "Artists",
                 items = topArtists.take(HomeCollapsedItemLimit),
-                expanded = true,
-                onToggleExpanded = {},
                 key = { index, artist -> "discover-artist-$index-${artist.id}" }
             ) { artist ->
                 val songsCount = songs.count { it.artistId == artist.id }
@@ -442,12 +458,11 @@ internal fun DiscoverTab(
             HomeSongGridSection(
                 title = "New Music",
                 songs = freshSongs,
-                expanded = true,
-                onToggleExpanded = {},
                 keyPrefix = "discover-song",
                 onPlaySong = onPlaySong,
                 onAddSongToPlaylist = onAddSongToPlaylist,
-                onDownloadSong = onDownloadSong
+                onDownloadSong = onDownloadSong,
+                onShareSong = onShareSong
             )
         }
     }
@@ -461,11 +476,14 @@ internal fun ProfileTab(
     message: String?,
     onLogin: () -> Unit,
     onEditProfile: () -> Unit,
+    onOpenAdmin: () -> Unit,
+    onShareProfile: () -> Unit,
     onLogout: () -> Unit,
     onCollapseBottomBar: () -> Unit,
     onExpandBottomBar: () -> Unit
 ) {
     val listState = rememberLazyListState()
+    val bottomContentPadding = LocalBottomBarContentPadding.current + 15.dp
 
     LaunchedEffect(listState) {
         var lastIndex = 0
@@ -490,7 +508,7 @@ internal fun ProfileTab(
             .background(Color.Black)
             .padding(horizontal = 20.dp, vertical = 2.dp),
         state = listState,
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = PaddingValues(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(18.dp)
     ) {
         item {
@@ -521,7 +539,7 @@ internal fun ProfileTab(
                 }
                 Spacer(Modifier.height(14.dp))
                 Text(
-                    text = user?.displayName?.takeIf { it.isNotBlank() } ?: "Guest listener",
+                    text = user?.displayName?.takeIf { it.isNotBlank() } ?: "No profile",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -563,6 +581,20 @@ internal fun ProfileTab(
                         sub = "Name and avatar",
                         icon = Icons.Rounded.Edit,
                         onClick = onEditProfile
+                    )
+                    if (user.isAdmin) {
+                        LibraryEntryRow(
+                            title = "Admin",
+                            sub = "Manage catalog and users",
+                            icon = Icons.Rounded.AdminPanelSettings,
+                            onClick = onOpenAdmin
+                        )
+                    }
+                    LibraryEntryRow(
+                        title = "Share profile",
+                        sub = user.displayName,
+                        icon = Icons.Rounded.Share,
+                        onClick = onShareProfile
                     )
                     LibraryEntryRow(
                         title = "Log out",

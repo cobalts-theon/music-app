@@ -1,6 +1,8 @@
 package com.example.cinderssoul
 
 import android.app.Application
+import android.content.Context
+import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -13,10 +15,16 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.cinderssoul.local.CinderDatabase
 import com.example.cinderssoul.repository.SongRepository
+import com.example.cinderssoul.admin.AdminActivity
 import com.example.cinderssoul.ui.app.MusicApp
 import com.example.cinderssoul.ui.theme.CindersSoulTheme
 
 class MainActivity : ComponentActivity() {
+    private companion object {
+        private const val PLAYER_PREFS = "player_state"
+        private const val KEY_AUTH_USER_ROLE = "auth_user_role"
+    }
+
     private val database by lazy { CinderDatabase.getInstance(applicationContext) }
     private val songRepository by lazy {
         SongRepository(musicCacheDao = database.musicCacheDao())
@@ -24,6 +32,12 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (hasAdminSession()) {
+            startActivity(Intent(this, AdminActivity::class.java))
+            finish()
+            return
+        }
+
         setContent {
             CindersSoulTheme(darkTheme = true) {
                 Surface(
@@ -44,5 +58,10 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun hasAdminSession(): Boolean {
+        val prefs = getSharedPreferences(PLAYER_PREFS, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_AUTH_USER_ROLE, null).equals("admin", ignoreCase = true)
     }
 }

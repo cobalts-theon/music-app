@@ -40,6 +40,24 @@ interface ApiService {
         @Body request: UpdateUserRequest
     ): ApiEnvelope<UserDto>
 
+    @GET("api/admin/summary")
+    suspend fun getAdminSummary(): ApiEnvelope<AdminSummaryDto>
+
+    @GET("api/admin/users")
+    suspend fun getAdminUsers(): ApiEnvelope<List<UserDto>>
+
+    @POST("api/admin/users")
+    suspend fun createAdminUser(@Body request: AdminCreateUserRequest): ApiEnvelope<UserDto>
+
+    @PUT("api/admin/users/{id}")
+    suspend fun updateAdminUser(
+        @Path("id") userId: Int,
+        @Body request: AdminUpdateUserRequest
+    ): ApiEnvelope<UserDto>
+
+    @DELETE("api/admin/users/{id}")
+    suspend fun deleteAdminUser(@Path("id") userId: Int): ApiEnvelope<Unit>
+
     @GET("api/songs")
     suspend fun getSongs(
         @Query("search") search: String? = null,
@@ -55,6 +73,18 @@ interface ApiService {
         @Query("offset") offset: Int = 0
     ): ApiEnvelope<List<ArtistDto>>
 
+    @POST("api/artists")
+    suspend fun createArtist(@Body request: CreateArtistRequest): ApiEnvelope<ArtistDto>
+
+    @PUT("api/artists/{id}")
+    suspend fun updateArtist(
+        @Path("id") artistId: Int,
+        @Body request: UpdateArtistRequest
+    ): ApiEnvelope<ArtistDto>
+
+    @DELETE("api/artists/{id}")
+    suspend fun deleteArtist(@Path("id") artistId: Int): ApiEnvelope<Unit>
+
     @GET("api/albums")
     suspend fun getAlbums(
         @Query("artistId") artistId: Int? = null,
@@ -62,6 +92,30 @@ interface ApiService {
         @Query("limit") limit: Int = 30,
         @Query("offset") offset: Int = 0
     ): ApiEnvelope<List<AlbumDto>>
+
+    @POST("api/albums")
+    suspend fun createAlbum(@Body request: CreateAlbumRequest): ApiEnvelope<AlbumDto>
+
+    @PUT("api/albums/{id}")
+    suspend fun updateAlbum(
+        @Path("id") albumId: Int,
+        @Body request: UpdateAlbumRequest
+    ): ApiEnvelope<AlbumDto>
+
+    @DELETE("api/albums/{id}")
+    suspend fun deleteAlbum(@Path("id") albumId: Int): ApiEnvelope<Unit>
+
+    @POST("api/songs")
+    suspend fun createSong(@Body request: CreateSongRequest): ApiEnvelope<SongDto>
+
+    @PUT("api/songs/{id}")
+    suspend fun updateSong(
+        @Path("id") songId: Int,
+        @Body request: UpdateSongRequest
+    ): ApiEnvelope<SongDto>
+
+    @DELETE("api/songs/{id}")
+    suspend fun deleteSong(@Path("id") songId: Int): ApiEnvelope<Unit>
 
     @GET("api/playlists")
     suspend fun getPlaylists(): ApiEnvelope<List<PlaylistDto>>
@@ -90,6 +144,19 @@ interface ApiService {
     @DELETE("api/playlists/{id}/songs/{songId}")
     suspend fun removeSongFromPlaylist(
         @Path("id") playlistId: Int,
+        @Path("songId") songId: Int
+    ): ApiEnvelope<Unit>
+
+    @GET("api/library/songs")
+    suspend fun getLibrarySongs(): ApiEnvelope<List<SongDto>>
+
+    @POST("api/library/songs")
+    suspend fun addSongToLibrary(
+        @Body request: AddSongRequest
+    ): ApiEnvelope<SongDto>
+
+    @DELETE("api/library/songs/{songId}")
+    suspend fun removeSongFromLibrary(
         @Path("songId") songId: Int
     ): ApiEnvelope<Unit>
 

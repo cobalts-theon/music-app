@@ -83,17 +83,17 @@ interface MusicCacheDao {
         upsertAlbums(albums)
     }
 
-    @Query("SELECT songId FROM favorite_songs ORDER BY createdAt DESC")
-    suspend fun getFavoriteSongIds(): List<Int>
+    @Query("SELECT songId FROM favorite_songs WHERE userId = :userId ORDER BY createdAt DESC")
+    suspend fun getFavoriteSongIds(userId: Int): List<Int>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertFavoriteSong(favorite: FavoriteSongEntity)
 
-    @Query("DELETE FROM favorite_songs WHERE songId = :songId")
-    suspend fun deleteFavoriteSong(songId: Int)
+    @Query("DELETE FROM favorite_songs WHERE userId = :userId AND songId = :songId")
+    suspend fun deleteFavoriteSong(userId: Int, songId: Int)
 
-    @Query("SELECT songId FROM downloaded_songs ORDER BY downloadedAt DESC")
-    suspend fun getDownloadedSongIds(): List<Int>
+    @Query("SELECT songId FROM downloaded_songs WHERE userId = :userId ORDER BY downloadedAt DESC")
+    suspend fun getDownloadedSongIds(userId: Int): List<Int>
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsertDownloadedSong(downloadedSong: DownloadedSongEntity)
@@ -106,16 +106,18 @@ interface MusicCacheDao {
         DELETE FROM listening_history
         WHERE id NOT IN (
             SELECT id FROM listening_history
+            WHERE userId = :userId
             ORDER BY playedAt DESC
             LIMIT :maxRows
         )
+        AND userId = :userId
         """
     )
-    suspend fun trimListeningHistory(maxRows: Int)
+    suspend fun trimListeningHistory(userId: Int, maxRows: Int)
 
     @Transaction
     suspend fun addListeningHistory(history: ListeningHistoryEntity, maxRows: Int = 200) {
         insertListeningHistory(history)
-        trimListeningHistory(maxRows)
+        trimListeningHistory(history.userId, maxRows)
     }
 }

@@ -105,6 +105,11 @@ backend/
 - `POST /api/playlists/:id/songs` - Add song to playlist (protected)
 - `DELETE /api/playlists/:id/songs/:songId` - Remove song from playlist (protected)
 
+### Library
+- `GET /api/library/songs` - Get current user's saved library songs (protected)
+- `POST /api/library/songs` - Save a song to current user's library (protected)
+- `DELETE /api/library/songs/:songId` - Remove a song from current user's library (protected)
+
 ### Albums
 - `GET /api/albums` - Get all albums
 - `GET /api/albums/:id` - Get album by ID
@@ -119,9 +124,9 @@ backend/
 - `PUT /api/artists/:id` - Update artist (protected)
 - `DELETE /api/artists/:id` - Delete artist (protected)
 
-### Offline Personal Data
-Favorites, listening history, and downloaded songs are stored on device with Room.
-The server does not expose `/api/favorites`; playlist CRUD stays under `/api/playlists`.
+### Personal Data Split
+Saved library/favorite songs and playlists are stored in MySQL through the API so they follow the logged-in user across devices.
+Listening history and downloaded songs stay on device with Room because they are playback/cache state.
 
 ### Upload
 - `POST /api/upload/image` - Upload image file (protected)
@@ -134,6 +139,17 @@ The server does not expose `/api/favorites`; playlist CRUD stays under `/api/pla
 Required for Google auth:
 - `GOOGLE_CLIENT_ID` - One or many Google OAuth client IDs (comma-separated if multiple).
 - `GOOGLE_SERVER_CLIENT_ID` - Fallback when `GOOGLE_CLIENT_ID` is not set.
+
+Required for email OTP and welcome emails:
+- `MAIL_HOST` - SMTP host, for example `smtp.gmail.com`.
+- `MAIL_PORT` - SMTP port, usually `587` or `465`.
+- `MAIL_SECURE` - Optional. `true` for port `465`, otherwise `false`. If omitted, backend auto-uses secure mode when port is `465`.
+- `MAIL_USER` - SMTP username.
+- `MAIL_PASS` - SMTP password or app password.
+- `MAIL_FROM` - Optional sender, for example `"Cinder's Soul" <noreply@example.com>`.
+- Backend also accepts equivalent aliases: `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`.
+
+Password reset OTP is sent only by email. If SMTP is not configured, the forgot-password endpoint returns an error instead of exposing the OTP in the API response.
 
 ## Development
 

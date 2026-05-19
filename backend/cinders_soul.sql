@@ -116,6 +116,18 @@ INSERT INTO `playlist_songs` (`playlist_id`, `song_id`, `position`, `added_at`) 
 -- --------------------------------------------------------
 
 --
+-- Cấu trúc bảng cho bảng `user_library_songs`
+--
+
+CREATE TABLE `user_library_songs` (
+  `user_id` int(11) NOT NULL,
+  `song_id` int(11) NOT NULL,
+  `created_at` timestamp NOT NULL DEFAULT current_timestamp()
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- --------------------------------------------------------
+
+--
 -- Cấu trúc bảng cho bảng `refresh_tokens`
 --
 
@@ -177,6 +189,7 @@ CREATE TABLE `users` (
   `password_hash` varchar(255) NOT NULL,
   `display_name` varchar(255) NOT NULL,
   `avatar_url` varchar(512) DEFAULT NULL,
+  `role` varchar(32) NOT NULL DEFAULT 'user',
   `created_at` timestamp NOT NULL DEFAULT current_timestamp(),
   `updated_at` timestamp NOT NULL DEFAULT current_timestamp() ON UPDATE current_timestamp()
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -185,10 +198,10 @@ CREATE TABLE `users` (
 -- Đang đổ dữ liệu cho bảng `users`
 --
 
-INSERT INTO `users` (`id`, `email`, `password_hash`, `display_name`, `avatar_url`, `created_at`, `updated_at`) VALUES
-(1, 'test@example.com', '$2a$10$rYqZVpF0rNj0EKkqM7NqLO7QC9YwOZjF5cHFwIR1qKQqFX8hMKGwK', 'Test User', NULL, '2026-04-04 15:14:28', '2026-04-04 15:14:28'),
-(2, 'admin@example.com', '$2a$10$rYqZVpF0rNj0EKkqM7NqLO7QC9YwOZjF5cHFwIR1qKQqFX8hMKGwK', 'Admin User', NULL, '2026-04-04 15:14:28', '2026-04-04 15:14:28'),
-(6, 'theon@example.com', '$2a$10$d4o3q677LJ4GZRhHuAj.IOxAMoKUUvjC/XublRq7WwcuCEoG7VfKy', 'cobalt', NULL, '2026-04-05 02:20:53', '2026-04-05 02:42:32');
+INSERT INTO `users` (`id`, `email`, `password_hash`, `display_name`, `avatar_url`, `role`, `created_at`, `updated_at`) VALUES
+(1, 'test@example.com', '$2a$10$rYqZVpF0rNj0EKkqM7NqLO7QC9YwOZjF5cHFwIR1qKQqFX8hMKGwK', 'Test User', NULL, 'user', '2026-04-04 15:14:28', '2026-04-04 15:14:28'),
+(2, 'admin@example.com', '$2a$10$rYqZVpF0rNj0EKkqM7NqLO7QC9YwOZjF5cHFwIR1qKQqFX8hMKGwK', 'Admin User', NULL, 'admin', '2026-04-04 15:14:28', '2026-04-04 15:14:28'),
+(6, 'theon@example.com', '$2a$10$d4o3q677LJ4GZRhHuAj.IOxAMoKUUvjC/XublRq7WwcuCEoG7VfKy', 'cobalt', NULL, 'user', '2026-04-05 02:20:53', '2026-04-05 02:42:32');
 
 --
 -- Chỉ mục cho các bảng đã đổ
@@ -223,6 +236,15 @@ ALTER TABLE `playlist_songs`
   ADD PRIMARY KEY (`playlist_id`,`song_id`),
   ADD KEY `idx_playlist_id` (`playlist_id`),
   ADD KEY `idx_song_id` (`song_id`);
+
+--
+-- Chỉ mục cho bảng `user_library_songs`
+--
+ALTER TABLE `user_library_songs`
+  ADD PRIMARY KEY (`user_id`,`song_id`),
+  ADD KEY `idx_user_library_user_id` (`user_id`),
+  ADD KEY `idx_user_library_song_id` (`song_id`),
+  ADD KEY `idx_user_library_created_at` (`created_at`);
 
 --
 -- Chỉ mục cho bảng `refresh_tokens`
@@ -313,6 +335,13 @@ ALTER TABLE `playlists`
 ALTER TABLE `playlist_songs`
   ADD CONSTRAINT `playlist_songs_ibfk_1` FOREIGN KEY (`playlist_id`) REFERENCES `playlists` (`id`) ON DELETE CASCADE,
   ADD CONSTRAINT `playlist_songs_ibfk_2` FOREIGN KEY (`song_id`) REFERENCES `songs` (`id`) ON DELETE CASCADE;
+
+--
+-- Các ràng buộc cho bảng `user_library_songs`
+--
+ALTER TABLE `user_library_songs`
+  ADD CONSTRAINT `user_library_songs_ibfk_1` FOREIGN KEY (`user_id`) REFERENCES `users` (`id`) ON DELETE CASCADE,
+  ADD CONSTRAINT `user_library_songs_ibfk_2` FOREIGN KEY (`song_id`) REFERENCES `songs` (`id`) ON DELETE CASCADE;
 
 --
 -- Các ràng buộc cho bảng `refresh_tokens`

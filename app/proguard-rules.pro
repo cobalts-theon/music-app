@@ -19,3 +19,8 @@
 # If you keep the line number information, uncomment this to
 # hide the original source file name.
 #-renamesourcefileattribute SourceFile
+
+# Retrofit/Gson deserialize these DTOs through reflection. Keep field names and
+# constructors stable when release builds are minified.
+-keepattributes Signature,*Annotation*
+-keep class com.example.cinderssoul.network.** { *; }

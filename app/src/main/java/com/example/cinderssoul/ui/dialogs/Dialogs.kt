@@ -18,11 +18,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -53,12 +57,13 @@ import com.example.cinderssoul.ui.components.CoverImage
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 
+private val DialogTextFieldShape = RoundedCornerShape(28.dp)
+
 @Composable
 internal fun AccountAuthDialog(
     user: User?,
     isLoading: Boolean,
     message: String?,
-    resetDevOtp: String?,
     onDismiss: () -> Unit,
     onLogin: (email: String, password: String) -> Unit,
     onRegister: (email: String, password: String, displayName: String) -> Unit,
@@ -114,14 +119,6 @@ internal fun AccountAuthDialog(
                         color = MaterialTheme.colorScheme.primary
                     )
                 }
-                if (!resetDevOtp.isNullOrBlank() && mode == AuthDialogMode.ForgotPassword) {
-                    Text(
-                        text = "OTP: $resetDevOtp",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
                 when (mode) {
                     AuthDialogMode.SignIn -> {
                         AuthEmailField(email = email, onEmailChange = { email = it })
@@ -140,7 +137,8 @@ internal fun AccountAuthDialog(
                             value = displayName,
                             onValueChange = { displayName = it },
                             singleLine = true,
-                            label = { Text("Display name") }
+                            label = { Text("Display name") },
+                            shape = DialogTextFieldShape
                         )
                         AuthEmailField(email = email, onEmailChange = { email = it })
                         AuthPasswordField(value = password, label = "Password", onChange = { password = it })
@@ -197,7 +195,8 @@ internal fun AccountAuthDialog(
                             value = displayName,
                             onValueChange = { displayName = it },
                             singleLine = true,
-                            label = { Text("Display name") }
+                            label = { Text("Display name") },
+                            shape = DialogTextFieldShape
                         )
                     }
                 }
@@ -284,7 +283,8 @@ internal fun AuthEmailField(email: String, onEmailChange: (String) -> Unit) {
         value = email,
         onValueChange = onEmailChange,
         singleLine = true,
-        label = { Text("Email") }
+        label = { Text("Email") },
+        shape = DialogTextFieldShape
     )
 }
 
@@ -296,6 +296,7 @@ internal fun AuthPasswordField(value: String, label: String, onChange: (String) 
         onValueChange = onChange,
         singleLine = true,
         label = { Text(label) },
+        shape = DialogTextFieldShape,
         visualTransformation = PasswordVisualTransformation()
     )
 }
@@ -363,12 +364,14 @@ internal fun CreatePlaylistDialog(
                     value = name,
                     onValueChange = { name = it },
                     singleLine = true,
-                    label = { Text("Playlist name") }
+                    label = { Text("Playlist name") },
+                    shape = DialogTextFieldShape
                 )
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("Description") },
+                    shape = DialogTextFieldShape,
                     maxLines = 2
                 )
             }
@@ -469,6 +472,126 @@ internal fun AddSongToPlaylistDialog(
 }
 
 @Composable
+internal fun AddSongsToPlaylistDialog(
+    playlist: Playlist,
+    songs: List<Song>,
+    onDismiss: () -> Unit,
+    onAddSong: (Song) -> Unit
+) {
+    var query by remember(playlist.id) { mutableStateOf("") }
+    val existingSongIds = playlist.songs.map { it.id }.toSet()
+    val normalizedQuery = query.trim().lowercase()
+    val availableSongs = songs
+        .filterNot { it.id in existingSongIds }
+        .filter { song ->
+            normalizedQuery.isBlank() ||
+                song.title.lowercase().contains(normalizedQuery) ||
+                song.artistName.lowercase().contains(normalizedQuery) ||
+                song.albumTitle.lowercase().contains(normalizedQuery)
+        }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                text = "Add songs",
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    text = playlist.name,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+                OutlinedTextField(
+                    modifier = Modifier.fillMaxWidth(),
+                    value = query,
+                    onValueChange = { query = it },
+                    singleLine = true,
+                    label = { Text("Search songs") },
+                    shape = DialogTextFieldShape,
+                    leadingIcon = {
+                        Icon(imageVector = Icons.Rounded.Search, contentDescription = null)
+                    },
+                    trailingIcon = {
+                        if (query.isNotBlank()) {
+                            IconButton(onClick = { query = "" }) {
+                                Icon(
+                                    imageVector = Icons.Rounded.Close,
+                                    contentDescription = "Clear search"
+                                )
+                            }
+                        }
+                    }
+                )
+
+                if (availableSongs.isEmpty()) {
+                    Text(
+                        text = if (query.isBlank()) {
+                            "All songs are already in this playlist."
+                        } else {
+                            "No songs found."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .heightIn(max = 360.dp)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        availableSongs.forEach { song ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable { onAddSong(song) }
+                                    .padding(horizontal = 8.dp, vertical = 7.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                CoverImage(
+                                    imageUrl = song.coverUrl,
+                                    title = song.title,
+                                    modifier = Modifier.size(42.dp)
+                                )
+                                Spacer(Modifier.width(10.dp))
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = song.title,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                    Text(
+                                        text = "${song.artistName} • ${song.albumTitle}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onDismiss) {
+                Text("Done")
+            }
+        }
+    )
+}
+
+@Composable
 internal fun EditPlaylistDialog(
     playlist: Playlist,
     onDismiss: () -> Unit,
@@ -503,12 +626,14 @@ internal fun EditPlaylistDialog(
                     value = name,
                     onValueChange = { name = it },
                     singleLine = true,
-                    label = { Text("Playlist name") }
+                    label = { Text("Playlist name") },
+                    shape = DialogTextFieldShape
                 )
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("Description") },
+                    shape = DialogTextFieldShape,
                     maxLines = 2
                 )
             }

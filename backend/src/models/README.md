@@ -12,10 +12,11 @@ Tất cả các models được định nghĩa bằng Sequelize ORM cho MySQL da
 4. **Song** - Bài hát
 5. **Playlist** - Playlist của user
 6. **PlaylistSong** - Quan hệ giữa playlist và bài hát
-7. **RefreshToken** - JWT refresh tokens
+7. **UserLibrarySong** - Quan hệ giữa user và bài hát đã lưu trong library
+8. **RefreshToken** - JWT refresh tokens
 
-Bài hát yêu thích, lịch sử nghe và nhạc đã tải được lưu offline bằng Android
-Room, không tạo bảng Sequelize/MySQL.
+Bài hát yêu thích/library được lưu trong MySQL để đồng bộ theo tài khoản.
+Lịch sử nghe và nhạc đã tải vẫn lưu offline bằng Android Room.
 
 ## Cách sử dụng
 
@@ -30,6 +31,7 @@ const {
   Song, 
   Playlist,
   PlaylistSong,
+  UserLibrarySong,
   RefreshToken
 } = require('./models');
 
@@ -211,6 +213,8 @@ const albumCount = await artist.countAlbums();
 ```
 User
 ├── hasMany Playlist (user.playlists)
+├── hasMany UserLibrarySong (user.librarySongLinks)
+├── belongsToMany Song through UserLibrarySong (user.librarySongs)
 └── hasMany RefreshToken (user.refreshTokens)
 
 Artist
@@ -224,6 +228,8 @@ Album
 Song
 ├── belongsTo Artist (song.artist)
 ├── belongsTo Album (song.album)
+├── hasMany UserLibrarySong (song.libraryLinks)
+├── belongsToMany User through UserLibrarySong (song.libraryUsers)
 └── belongsToMany Playlist through PlaylistSong (song.playlists)
 
 Playlist

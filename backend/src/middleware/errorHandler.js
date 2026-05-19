@@ -18,6 +18,7 @@ const errorHandler = (err, req, res, next) => {
       success: false,
       status: err.status,
       message: err.message,
+      errors: err.errors,
       stack: err.stack,
       error: err
     });
@@ -27,7 +28,8 @@ const errorHandler = (err, req, res, next) => {
       res.status(err.statusCode).json({
         success: false,
         status: err.status,
-        message: err.message
+        message: err.message,
+        errors: err.errors
       });
     } else {
       // Programming or unknown error

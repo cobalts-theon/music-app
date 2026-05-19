@@ -5,5 +5,9 @@ data class User(
     val email: String,
     val displayName: String,
     val avatarUrl: String? = null,
+    val role: String = "user",
     val createdAt: String? = null
-)
+) {
+    val isAdmin: Boolean
+        get() = role.equals("admin", ignoreCase = true)
+}

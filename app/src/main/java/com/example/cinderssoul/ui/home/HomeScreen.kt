@@ -1,7 +1,10 @@
 package com.example.cinderssoul.ui.home
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -26,10 +29,13 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.rounded.PlaylistAdd
+import androidx.compose.material.icons.rounded.AccountCircle
+import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.ErrorOutline
 import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -44,11 +50,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.example.cinderssoul.MusicUiState
@@ -56,11 +62,20 @@ import com.example.cinderssoul.models.Album
 import com.example.cinderssoul.models.Artist
 import com.example.cinderssoul.models.Song
 import com.example.cinderssoul.models.User
+import com.example.cinderssoul.ui.app.HomeCollection
 import com.example.cinderssoul.ui.app.HomeCollapsedItemLimit
+import com.example.cinderssoul.ui.app.HomeSongGridCollapsedItemLimit
+import com.example.cinderssoul.ui.app.HomeSongGridRows
+import com.example.cinderssoul.ui.app.LocalBottomBarContentPadding
 import com.example.cinderssoul.ui.components.AppleMusicPageHeader
 import com.example.cinderssoul.ui.components.CoverImage
 import com.example.cinderssoul.ui.components.FeaturedSongCard
 import com.example.cinderssoul.ui.components.LibraryImageTile
+import com.example.cinderssoul.ui.components.LibraryMediaRow
+import com.example.cinderssoul.ui.components.SongRow
+import com.example.cinderssoul.ui.components.itemCountText
+
+private val HomeGridTileBorder = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
 
 @Composable
 internal fun HomeTab(
@@ -71,18 +86,16 @@ internal fun HomeTab(
     onPlaySong: (Song) -> Unit,
     onAddSongToPlaylist: (Song) -> Unit,
     onDownloadSong: (Song) -> Unit,
+    onShareSong: (Song) -> Unit,
     onArtistClick: (Artist) -> Unit,
     onAlbumClick: (Album) -> Unit,
+    onOpenCollection: (HomeCollection) -> Unit,
     onAccountClick: () -> Unit,
     onCollapseBottomBar: () -> Unit,
     onExpandBottomBar: () -> Unit
 ) {
     val listState = rememberLazyListState()
-    var madeForYouExpanded by rememberSaveable { mutableStateOf(false) }
-    var artistsExpanded by rememberSaveable { mutableStateOf(false) }
-    var albumsExpanded by rememberSaveable { mutableStateOf(false) }
-    var recentlyAddedExpanded by rememberSaveable { mutableStateOf(false) }
-    var mostPlayedExpanded by rememberSaveable { mutableStateOf(false) }
+    val bottomContentPadding = LocalBottomBarContentPadding.current + 15.dp
 
     LaunchedEffect(listState) {
         var lastIndex = 0
@@ -144,7 +157,7 @@ internal fun HomeTab(
                     .statusBarsPadding()
                     .padding(top = 2.dp),
                 state = listState,
-                contentPadding = PaddingValues(bottom = 24.dp),
+                contentPadding = PaddingValues(bottom = bottomContentPadding),
                 verticalArrangement = Arrangement.spacedBy(18.dp)
             ) {
                 item {
@@ -163,8 +176,7 @@ internal fun HomeTab(
                     HomeHorizontalCardSection(
                         title = "Made For You",
                         items = madeForYouSongs,
-                        expanded = madeForYouExpanded,
-                        onToggleExpanded = { madeForYouExpanded = !madeForYouExpanded },
+                        onSeeAll = { onOpenCollection(HomeCollection.MadeForYou) },
                         key = { index, song -> "home-made-$index-${song.id}" }
                     ) { song ->
                         LibraryImageTile(
@@ -179,8 +191,7 @@ internal fun HomeTab(
                     HomeHorizontalCardSection(
                         title = "Artists You Follow",
                         items = uiState.artists,
-                        expanded = artistsExpanded,
-                        onToggleExpanded = { artistsExpanded = !artistsExpanded },
+                        onSeeAll = { onOpenCollection(HomeCollection.Artists) },
                         key = { index, artist -> "home-artist-$index-${artist.id}" }
                     ) { artist ->
                         val songsCount = uiState.songs.count { it.artistId == artist.id }
@@ -196,8 +207,7 @@ internal fun HomeTab(
                     HomeHorizontalCardSection(
                         title = "New Albums",
                         items = uiState.albums,
-                        expanded = albumsExpanded,
-                        onToggleExpanded = { albumsExpanded = !albumsExpanded },
+                        onSeeAll = { onOpenCollection(HomeCollection.Albums) },
                         key = { index, album -> "home-album-$index-${album.id}" }
                     ) { album ->
                         val songsCount = uiState.songs.count { it.albumId == album.id }
@@ -213,24 +223,24 @@ internal fun HomeTab(
                     HomeSongGridSection(
                         title = "Recently Added",
                         songs = recentlyAddedSongs,
-                        expanded = recentlyAddedExpanded,
-                        onToggleExpanded = { recentlyAddedExpanded = !recentlyAddedExpanded },
+                        onSeeAll = { onOpenCollection(HomeCollection.RecentlyAdded) },
                         keyPrefix = "home-new",
                         onPlaySong = onPlaySong,
                         onAddSongToPlaylist = onAddSongToPlaylist,
-                        onDownloadSong = onDownloadSong
+                        onDownloadSong = onDownloadSong,
+                        onShareSong = onShareSong
                     )
                 }
                 item {
                     HomeSongGridSection(
                         title = "Most Played",
                         songs = mostPlayedSongs,
-                        expanded = mostPlayedExpanded,
-                        onToggleExpanded = { mostPlayedExpanded = !mostPlayedExpanded },
+                        onSeeAll = { onOpenCollection(HomeCollection.MostPlayed) },
                         keyPrefix = "home-most-played",
                         onPlaySong = onPlaySong,
                         onAddSongToPlaylist = onAddSongToPlaylist,
-                        onDownloadSong = onDownloadSong
+                        onDownloadSong = onDownloadSong,
+                        onShareSong = onShareSong
                     )
                 }
             }
@@ -240,26 +250,186 @@ internal fun HomeTab(
 }
 
 @Composable
+internal fun HomeCollectionDetailScreen(
+    modifier: Modifier,
+    collection: HomeCollection,
+    songs: List<Song>,
+    artists: List<Artist>,
+    albums: List<Album>,
+    onPlaySong: (Song) -> Unit,
+    onAddSongToPlaylist: (Song) -> Unit,
+    onDownloadSong: (Song) -> Unit,
+    onShareSong: (Song) -> Unit,
+    onArtistClick: (Artist) -> Unit,
+    onAlbumClick: (Album) -> Unit,
+    onCollapseBottomBar: () -> Unit,
+    onExpandBottomBar: () -> Unit
+) {
+    val listState = rememberLazyListState()
+    val bottomContentPadding = LocalBottomBarContentPadding.current + 15.dp
+    val collectionSongs = when (collection) {
+        HomeCollection.MadeForYou,
+        HomeCollection.RecentlyAdded -> songs
+        HomeCollection.MostPlayed -> songs.sortedByDescending { it.playCount }
+        HomeCollection.Artists,
+        HomeCollection.Albums -> emptyList()
+    }
+    val itemCount = when (collection) {
+        HomeCollection.Artists -> artists.size
+        HomeCollection.Albums -> albums.size
+        else -> collectionSongs.size
+    }
+    val itemName = when (collection) {
+        HomeCollection.Artists -> "artist"
+        HomeCollection.Albums -> "album"
+        else -> "song"
+    }
+
+    LaunchedEffect(listState) {
+        var lastIndex = 0
+        var lastOffset = 0
+        snapshotFlow { listState.firstVisibleItemIndex to listState.firstVisibleItemScrollOffset }
+            .collect { (index, offset) ->
+                val down = index > lastIndex || (index == lastIndex && offset > lastOffset + 3)
+                val up = index < lastIndex || (index == lastIndex && offset + 6 < lastOffset)
+                val enoughOffset = index > 0 || offset > 96
+                if (down && enoughOffset) onCollapseBottomBar()
+                val nearTop = index == 0 && offset <= 20
+                if (nearTop && (up || lastIndex > 0 || lastOffset > 40)) onExpandBottomBar()
+                lastIndex = index
+                lastOffset = offset
+            }
+    }
+
+    LazyColumn(
+        modifier = modifier
+            .fillMaxSize()
+            .background(Color.Black),
+        state = listState,
+        contentPadding = PaddingValues(bottom = bottomContentPadding),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        item {
+            AppleMusicPageHeader(
+                title = collection.title,
+                subtitle = itemCountText(itemCount, itemName)
+            )
+        }
+
+        when (collection) {
+            HomeCollection.Artists -> {
+                if (artists.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No artists available",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                } else {
+                    itemsIndexed(
+                        artists,
+                        key = { index, artist -> "home-detail-artist-$index-${artist.id}" }
+                    ) { _, artist ->
+                        val songsCount = songs.count { it.artistId == artist.id }
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            LibraryMediaRow(
+                                title = artist.name,
+                                subtitle = itemCountText(songsCount, "song"),
+                                imageUrl = artist.avatarUrl,
+                                fallbackIcon = Icons.Rounded.AccountCircle,
+                                circleArtwork = true,
+                                onClick = { onArtistClick(artist) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            HomeCollection.Albums -> {
+                if (albums.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No albums available",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                } else {
+                    itemsIndexed(
+                        albums,
+                        key = { index, album -> "home-detail-album-$index-${album.id}" }
+                    ) { _, album ->
+                        val songsCount = songs.count { it.albumId == album.id }
+                        Box(modifier = Modifier.padding(horizontal = 16.dp)) {
+                            LibraryMediaRow(
+                                title = album.title,
+                                subtitle = album.artist?.name ?: itemCountText(songsCount, "song"),
+                                imageUrl = album.coverUrl,
+                                fallbackIcon = Icons.Rounded.Album,
+                                onClick = { onAlbumClick(album) }
+                            )
+                        }
+                    }
+                }
+            }
+
+            else -> {
+                if (collectionSongs.isEmpty()) {
+                    item {
+                        Text(
+                            text = "No songs available",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(horizontal = 16.dp)
+                        )
+                    }
+                } else {
+                    itemsIndexed(
+                        collectionSongs,
+                        key = { index, song -> "home-detail-song-${collection.name}-$index-${song.id}" }
+                    ) { _, song ->
+                        SongRow(
+                            song = song,
+                            onClick = { onPlaySong(song) },
+                            onPlay = { onPlaySong(song) },
+                            onAddToPlaylist = { onAddSongToPlaylist(song) },
+                            onDownload = { onDownloadSong(song) },
+                            onShare = { onShareSong(song) },
+                            showBackground = false
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 internal fun <T> HomeHorizontalCardSection(
     title: String,
     items: List<T>,
-    expanded: Boolean,
-    onToggleExpanded: () -> Unit,
+    onSeeAll: (() -> Unit)? = null,
     key: (Int, T) -> Any,
     itemContent: @Composable (T) -> Unit
 ) {
     if (items.isEmpty()) return
 
     val rowState = rememberLazyListState()
-    val flingBehavior = rememberSnapFlingBehavior(lazyListState = rowState)
-    val visibleItems = if (expanded) items else items.take(HomeCollapsedItemLimit)
+    val flingBehavior = rememberSnapFlingBehavior(
+        lazyListState = rowState,
+        snapPosition = SnapPosition.Start
+    )
+    val visibleItems = if (onSeeAll == null) items else items.take(HomeCollapsedItemLimit)
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         HomeSectionHeader(
             title = title,
             itemCount = items.size,
-            expanded = expanded,
-            onToggleExpanded = onToggleExpanded
+            collapsedItemLimit = HomeCollapsedItemLimit,
+            onSeeAll = onSeeAll
         )
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
@@ -283,28 +453,31 @@ internal fun <T> HomeHorizontalCardSection(
 internal fun HomeSongGridSection(
     title: String,
     songs: List<Song>,
-    expanded: Boolean,
-    onToggleExpanded: () -> Unit,
+    onSeeAll: (() -> Unit)? = null,
     keyPrefix: String,
     onPlaySong: (Song) -> Unit,
     onAddSongToPlaylist: (Song) -> Unit,
-    onDownloadSong: (Song) -> Unit
+    onDownloadSong: (Song) -> Unit,
+    onShareSong: (Song) -> Unit
 ) {
     if (songs.isEmpty()) return
 
     val gridState = rememberLazyGridState()
-    val flingBehavior = rememberSnapFlingBehavior(lazyGridState = gridState)
-    val visibleSongs = if (expanded) songs else songs.take(HomeCollapsedItemLimit)
+    val flingBehavior = rememberSnapFlingBehavior(
+        lazyGridState = gridState,
+        snapPosition = SnapPosition.Start
+    )
+    val visibleSongs = if (onSeeAll == null) songs else songs.take(HomeSongGridCollapsedItemLimit)
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         HomeSectionHeader(
             title = title,
             itemCount = songs.size,
-            expanded = expanded,
-            onToggleExpanded = onToggleExpanded
+            collapsedItemLimit = HomeSongGridCollapsedItemLimit,
+            onSeeAll = onSeeAll
         )
         LazyHorizontalGrid(
-            rows = GridCells.Fixed(4),
+            rows = GridCells.Fixed(HomeSongGridRows),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(304.dp),
@@ -323,7 +496,8 @@ internal fun HomeSongGridSection(
                     onClick = { onPlaySong(song) },
                     onPlay = { onPlaySong(song) },
                     onAddToPlaylist = { onAddSongToPlaylist(song) },
-                    onDownload = { onDownloadSong(song) }
+                    onDownload = { onDownloadSong(song) },
+                    onShare = { onShareSong(song) }
                 )
             }
         }
@@ -334,8 +508,8 @@ internal fun HomeSongGridSection(
 internal fun HomeSectionHeader(
     title: String,
     itemCount: Int,
-    expanded: Boolean,
-    onToggleExpanded: () -> Unit
+    collapsedItemLimit: Int,
+    onSeeAll: (() -> Unit)?
 ) {
     Row(
         modifier = Modifier
@@ -348,9 +522,9 @@ internal fun HomeSectionHeader(
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.weight(1f)
         )
-        if (itemCount > HomeCollapsedItemLimit) {
-            TextButton(onClick = onToggleExpanded) {
-                Text(if (expanded) "Less" else "See All")
+        if (onSeeAll != null && itemCount > collapsedItemLimit) {
+            TextButton(onClick = onSeeAll) {
+                Text("See All")
             }
         }
     }
@@ -362,7 +536,8 @@ internal fun HomeSongGridTile(
     onClick: () -> Unit,
     onPlay: () -> Unit,
     onAddToPlaylist: () -> Unit,
-    onDownload: () -> Unit
+    onDownload: () -> Unit,
+    onShare: () -> Unit
 ) {
     var showActions by remember { mutableStateOf(false) }
 
@@ -371,6 +546,7 @@ internal fun HomeSongGridTile(
             .width(304.dp)
             .height(70.dp)
             .clip(MaterialTheme.shapes.small)
+            .border(HomeGridTileBorder, MaterialTheme.shapes.small)
             .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.72f))
             .clickable(onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 7.dp),
@@ -425,6 +601,14 @@ internal fun HomeSongGridTile(
                         onDownload()
                     },
                     leadingIcon = { Icon(Icons.Rounded.DownloadDone, contentDescription = null) }
+                )
+                DropdownMenuItem(
+                    text = { Text("Share") },
+                    onClick = {
+                        showActions = false
+                        onShare()
+                    },
+                    leadingIcon = { Icon(Icons.Rounded.Share, contentDescription = null) }
                 )
             }
         }

@@ -1,6 +1,7 @@
 package com.example.cinderssoul.ui.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -32,6 +33,7 @@ import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,7 +49,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -63,6 +68,9 @@ import com.example.cinderssoul.models.User
 import com.example.cinderssoul.ui.app.AppleMusicRed
 import com.example.cinderssoul.ui.app.LibrarySection
 import com.example.cinderssoul.ui.app.RecentLibraryItem
+import java.util.Locale
+
+private val WhiteCardBorder = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
 
 @Composable
 internal fun AppleMusicPageHeader(
@@ -110,6 +118,7 @@ internal fun FeaturedSongCard(song: Song?, onPlaySong: (Song) -> Unit) {
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
+            .border(WhiteCardBorder, MaterialTheme.shapes.large)
             .background(
                 color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f),
                 shape = MaterialTheme.shapes.large
@@ -193,6 +202,7 @@ internal fun RowScope.BrowseCategoryTile(
         modifier = Modifier
             .weight(1f)
             .height(92.dp)
+            .border(WhiteCardBorder, MaterialTheme.shapes.medium)
             .background(backgroundColor, MaterialTheme.shapes.medium)
             .clickable(onClick = onClick)
             .padding(12.dp),
@@ -296,25 +306,43 @@ internal fun DiscoverGenreTile(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val colors = listOf(
-        Color(0xFFC0392B),
-        Color(0xFF2874A6),
-        Color(0xFF148F77),
-        Color(0xFF8E44AD),
-        Color(0xFFD35400),
-        Color(0xFF6C7A89)
-    )
+    val cardColor = GenreCardColors[colorIndex % GenreCardColors.size]
+    val imageModel = remember(title) { genreCardAssetModel(title) }
 
     Box(
         modifier = modifier
-            .height(78.dp)
+            .height(104.dp)
             .clip(MaterialTheme.shapes.medium)
-            .background(colors[colorIndex % colors.size])
-            .clickable(onClick = onClick)
-            .padding(12.dp),
+            .border(WhiteCardBorder, MaterialTheme.shapes.medium)
+            .background(cardColor)
+            .clickable(onClick = onClick),
         contentAlignment = Alignment.BottomStart
     ) {
-        Column {
+        AsyncImage(
+            model = imageModel,
+            contentDescription = null,
+            contentScale = ContentScale.Crop,
+            colorFilter = ColorFilter.tint(cardColor.copy(alpha = 0.46f), BlendMode.Softlight),
+            modifier = Modifier.fillMaxSize()
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(cardColor.copy(alpha = 0.42f))
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Black.copy(alpha = 0.04f),
+                            Color.Black.copy(alpha = 0.56f)
+                        )
+                    )
+                )
+        )
+        Column(modifier = Modifier.padding(12.dp)) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.titleMedium,
@@ -334,6 +362,43 @@ internal fun DiscoverGenreTile(
     }
 }
 
+private val GenreCardColors = listOf(
+    Color(0xFFC0392B),
+    Color(0xFF2874A6),
+    Color(0xFF148F77),
+    Color(0xFF8E44AD),
+    Color(0xFFD35400),
+    Color(0xFF6C7A89)
+)
+
+private const val GenreCardAssetPath = "file:///android_asset/genre_cards/"
+
+private fun genreCardAssetModel(title: String): String {
+    val normalized = title.trim().lowercase(Locale.US)
+    val fileName = when {
+        normalized.contains("electronic") ||
+            normalized.contains("edm") ||
+            normalized.contains("dance") -> "electronic.jpg"
+        normalized.contains("hip") ||
+            normalized.contains("rap") -> "hip_hop.png"
+        normalized.contains("alternative") ||
+            normalized.contains("indie") -> "alternative.png"
+        normalized.contains("rock") -> "rock.png"
+        normalized.contains("r&b") ||
+            normalized.contains("rnb") ||
+            normalized.contains("soul") -> "r_and_b.png"
+        normalized.contains("jazz") -> "jazz.jpg"
+        normalized.contains("chill") ||
+            normalized.contains("lofi") -> "chill.jpg"
+        normalized.contains("pop") ||
+            normalized.contains("v-pop") ||
+            normalized.contains("vpop") -> "pop.jpg"
+        else -> "default.png"
+    }
+
+    return GenreCardAssetPath + fileName
+}
+
 @Composable
 internal fun SongRow(
     song: Song,
@@ -341,6 +406,7 @@ internal fun SongRow(
     onPlay: (() -> Unit)? = null,
     onAddToPlaylist: (() -> Unit)? = null,
     onDownload: (() -> Unit)? = null,
+    onShare: (() -> Unit)? = null,
     onDelete: (() -> Unit)? = null,
     showBackground: Boolean = true
 ) {
@@ -350,6 +416,7 @@ internal fun SongRow(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp)
+            .border(WhiteCardBorder, MaterialTheme.shapes.small)
             .background(
                 color = MaterialTheme.colorScheme.surface,
                 shape = MaterialTheme.shapes.small
@@ -421,6 +488,18 @@ internal fun SongRow(
                             },
                             leadingIcon = {
                                 Icon(Icons.Rounded.DownloadDone, contentDescription = null)
+                            }
+                        )
+                    }
+                    if (onShare != null) {
+                        DropdownMenuItem(
+                            text = { Text("Share") },
+                            onClick = {
+                                showActions = false
+                                onShare.invoke()
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.Share, contentDescription = null)
                             }
                         )
                     }
@@ -511,7 +590,7 @@ internal fun CoverImage(imageUrl: String?, title: String, modifier: Modifier = M
         model = imageUrl,
         contentDescription = title,
         contentScale = ContentScale.Crop,
-        modifier = modifier.clip(MaterialTheme.shapes.small)
+        modifier = modifier.clip(MaterialTheme.shapes.small).border(WhiteCardBorder, MaterialTheme.shapes.small)
     )
 }
 
@@ -662,13 +741,17 @@ internal fun RowScope.RecentAddedGridTile(
                 is RecentLibraryItem.PlaylistItem -> CoverImage(
                     imageUrl = item.playlist.coverUrl,
                     title = item.playlist.name,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(WhiteCardBorder, MaterialTheme.shapes.small)
                 )
 
                 is RecentLibraryItem.AlbumItem -> CoverImage(
                     imageUrl = item.album.coverUrl,
                     title = item.album.title,
-                    modifier = Modifier.fillMaxSize()
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .border(WhiteCardBorder, MaterialTheme.shapes.small)
                 )
             }
         }
@@ -738,6 +821,7 @@ internal fun LibraryImageTile(
                 modifier = Modifier
                     .fillMaxSize()
                     .clip(MaterialTheme.shapes.small)
+                    .border(WhiteCardBorder, MaterialTheme.shapes.small)
             )
         }
         Spacer(Modifier.height(6.dp))
@@ -821,6 +905,7 @@ internal fun LibraryIconTile(
     Box(
         modifier = modifier
             .clip(MaterialTheme.shapes.small)
+            .border(WhiteCardBorder, MaterialTheme.shapes.small)
             .background(Color.White.copy(alpha = 0.08f)),
         contentAlignment = Alignment.Center
     ) {
@@ -851,7 +936,7 @@ internal fun CircleCoverImage(imageUrl: String?, title: String, modifier: Modifi
         model = imageUrl,
         contentDescription = title,
         contentScale = ContentScale.Crop,
-        modifier = modifier.clip(CircleShape)
+        modifier = modifier.clip(CircleShape).border(WhiteCardBorder, MaterialTheme.shapes.small),
     )
 }
 

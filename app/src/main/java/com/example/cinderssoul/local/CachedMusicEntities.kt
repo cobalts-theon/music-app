@@ -78,9 +78,13 @@ data class CachedAlbumEntity(
     val cachedAt: Long
 )
 
-@Entity(tableName = "favorite_songs")
+@Entity(
+    tableName = "favorite_songs",
+    primaryKeys = ["userId", "songId"]
+)
 data class FavoriteSongEntity(
-    @PrimaryKey
+    @ColumnInfo(name = "userId")
+    val userId: Int,
     @ColumnInfo(name = "songId")
     val songId: Int,
     @ColumnInfo(name = "createdAt")
@@ -91,6 +95,8 @@ data class FavoriteSongEntity(
 data class ListeningHistoryEntity(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0L,
+    @ColumnInfo(name = "userId")
+    val userId: Int,
     @ColumnInfo(name = "songId")
     val songId: Int,
     @ColumnInfo(name = "playedAt")
@@ -99,9 +105,13 @@ data class ListeningHistoryEntity(
     val positionMs: Long = 0L
 )
 
-@Entity(tableName = "downloaded_songs")
+@Entity(
+    tableName = "downloaded_songs",
+    primaryKeys = ["userId", "songId"]
+)
 data class DownloadedSongEntity(
-    @PrimaryKey
+    @ColumnInfo(name = "userId")
+    val userId: Int,
     @ColumnInfo(name = "songId")
     val songId: Int,
     @ColumnInfo(name = "localUri")

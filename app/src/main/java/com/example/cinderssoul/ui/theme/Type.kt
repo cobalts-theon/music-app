@@ -2,28 +2,41 @@ package com.example.cinderssoul.ui.theme
 
 import androidx.compose.material3.Typography
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
+import com.example.cinderssoul.R
 
-private val AppFontFamily = FontFamily.SansSerif
+private val AppFontFamily = FontFamily(
+    Font(R.font.spotify_mix_ui_regular, FontWeight.Normal),
+    Font(R.font.spotify_mix_ui_bold, FontWeight.Medium),
+    Font(R.font.spotify_mix_ui_bold, FontWeight.SemiBold),
+    Font(R.font.spotify_mix_ui_bold, FontWeight.Bold)
+)
+
+private val TitleFontFamily = FontFamily(
+    Font(R.font.spotify_mix_ui_title_bold, FontWeight.Bold),
+    Font(R.font.spotify_mix_ui_title_extrabold, FontWeight.ExtraBold),
+    Font(R.font.spotify_mix_ui_title_extrabold, FontWeight.Black)
+)
 
 val Typography = Typography(
     displayLarge = TextStyle(
-        fontFamily = AppFontFamily,
-        fontWeight = FontWeight.Bold,
+        fontFamily = TitleFontFamily,
+        fontWeight = FontWeight.Black,
         fontSize = 48.sp,
         lineHeight = 54.sp
     ),
     headlineSmall = TextStyle(
-        fontFamily = AppFontFamily,
-        fontWeight = FontWeight.SemiBold,
+        fontFamily = TitleFontFamily,
+        fontWeight = FontWeight.Bold,
         fontSize = 24.sp,
         lineHeight = 30.sp
     ),
     titleLarge = TextStyle(
-        fontFamily = AppFontFamily,
-        fontWeight = FontWeight.SemiBold,
+        fontFamily = TitleFontFamily,
+        fontWeight = FontWeight.Bold,
         fontSize = 22.sp,
         lineHeight = 28.sp
     ),
@@ -43,8 +56,7 @@ val Typography = Typography(
         fontFamily = AppFontFamily,
         fontWeight = FontWeight.Normal,
         fontSize = 16.sp,
-        lineHeight = 23.sp,
-        letterSpacing = 0.1.sp
+        lineHeight = 23.sp
     ),
     bodyMedium = TextStyle(
         fontFamily = AppFontFamily,

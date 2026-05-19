@@ -19,22 +19,37 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.rounded.Sort
 import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.Category
+import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.PlayArrow
+import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.Shuffle
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -52,6 +67,7 @@ import com.example.cinderssoul.models.Song
 import com.example.cinderssoul.models.User
 import com.example.cinderssoul.ui.app.AppleMusicRed
 import com.example.cinderssoul.ui.app.LibrarySection
+import com.example.cinderssoul.ui.app.LocalBottomBarContentPadding
 import com.example.cinderssoul.ui.app.RecentLibraryItem
 import com.example.cinderssoul.ui.components.AppleMusicPageHeader
 import com.example.cinderssoul.ui.components.CoverImage
@@ -63,6 +79,15 @@ import com.example.cinderssoul.ui.components.RecentAddedGridTile
 import com.example.cinderssoul.ui.components.SectionTitle
 import com.example.cinderssoul.ui.components.SongRow
 import com.example.cinderssoul.ui.components.itemCountText
+
+private val LibraryTextFieldShape = RoundedCornerShape(28.dp)
+
+private enum class PlaylistSortMode(val label: String) {
+    Custom("Custom"),
+    Title("Title"),
+    Artist("Artist"),
+    Duration("Duration")
+}
 
 @Composable
 internal fun LibraryTab(
@@ -77,6 +102,7 @@ internal fun LibraryTab(
     onPlaySong: (Song) -> Unit,
     onAddSongToPlaylist: (Song) -> Unit,
     onDownloadSong: (Song) -> Unit,
+    onShareSong: (Song) -> Unit,
     onPlaylistClick: (Playlist) -> Unit,
     onArtistClick: (Artist) -> Unit,
     onAlbumClick: (Album) -> Unit,
@@ -88,6 +114,7 @@ internal fun LibraryTab(
     onExpandBottomBar: () -> Unit
 ) {
     val listState = rememberLazyListState()
+    val bottomContentPadding = LocalBottomBarContentPadding.current + 15.dp
     LaunchedEffect(listState) {
         var lastIndex = 0
         var lastOffset = 0
@@ -137,7 +164,7 @@ internal fun LibraryTab(
                 vertical = if (activeSection == LibrarySection.Overview) 2.dp else 10.dp
         ),
         state = listState,
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = PaddingValues(bottom = bottomContentPadding),
         verticalArrangement = if (activeSection == LibrarySection.Overview) {
             Arrangement.spacedBy(18.dp)
         } else {
@@ -284,6 +311,7 @@ internal fun LibraryTab(
                         onPlay = { onPlaySong(song) },
                         onAddToPlaylist = { onAddSongToPlaylist(song) },
                         onDownload = { onDownloadSong(song) },
+                        onShare = { onShareSong(song) },
                         showBackground = false
                     )
                 }
@@ -332,6 +360,7 @@ internal fun LibraryTab(
                             onPlay = { onPlaySong(song) },
                             onAddToPlaylist = { onAddSongToPlaylist(song) },
                             onDownload = { onDownloadSong(song) },
+                            onShare = { onShareSong(song) },
                             showBackground = false
                         )
                     }
@@ -346,9 +375,12 @@ internal fun PlaylistDetailScreen(
     modifier: Modifier = Modifier,
     playlist: Playlist,
     onPlaySong: (Song) -> Unit,
+    onAddSongs: (Playlist) -> Unit,
     onAddSongToPlaylist: (Song) -> Unit,
     onDownloadSong: (Song) -> Unit,
+    onShareSong: (Song) -> Unit,
     onEditPlaylist: (Playlist) -> Unit,
+    onSharePlaylist: (Playlist) -> Unit,
     onDownloadPlaylist: (Playlist) -> Int,
     onDeleteSong: (Song) -> Unit = {},
     onDeletePlaylist: (Playlist) -> Unit = {},
@@ -356,6 +388,26 @@ internal fun PlaylistDetailScreen(
     onExpandBottomBar: () -> Unit
 ) {
     val listState = rememberLazyListState()
+    val bottomContentPadding = LocalBottomBarContentPadding.current + 15.dp
+    var query by rememberSaveable(playlist.id) { mutableStateOf("") }
+    var sortMode by rememberSaveable(playlist.id) { mutableStateOf(PlaylistSortMode.Custom) }
+    val normalizedQuery = query.trim().lowercase()
+    val filteredSongs = if (normalizedQuery.isBlank()) {
+        playlist.songs
+    } else {
+        playlist.songs.filter { song ->
+            song.title.lowercase().contains(normalizedQuery) ||
+                song.artistName.lowercase().contains(normalizedQuery) ||
+                song.albumTitle.lowercase().contains(normalizedQuery) ||
+                song.genre.orEmpty().lowercase().contains(normalizedQuery)
+        }
+    }
+    val visibleSongs = when (sortMode) {
+        PlaylistSortMode.Custom -> filteredSongs
+        PlaylistSortMode.Title -> filteredSongs.sortedBy { it.title.lowercase() }
+        PlaylistSortMode.Artist -> filteredSongs.sortedWith(compareBy<Song> { it.artistName.lowercase() }.thenBy { it.title.lowercase() })
+        PlaylistSortMode.Duration -> filteredSongs.sortedBy { it.duration }
+    }
     LaunchedEffect(listState) {
         var lastIndex = 0
         var lastOffset = 0
@@ -377,7 +429,7 @@ internal fun PlaylistDetailScreen(
             .fillMaxSize()
             .background(Color.Black),
         state = listState,
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = PaddingValues(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item {
@@ -395,11 +447,30 @@ internal fun PlaylistDetailScreen(
                 playEnabled = playlist.songs.isNotEmpty(),
                 onPlayClick = { playlist.songs.firstOrNull()?.let(onPlaySong) }
             ) {
+                if (playlist.songs.isNotEmpty()) {
+                    LibraryCircularAction(
+                        icon = Icons.Rounded.Shuffle,
+                        contentDescription = "Shuffle playlist",
+                        onClick = { playlist.songs.shuffled().firstOrNull()?.let(onPlaySong) }
+                    )
+                }
+                LibraryCircularAction(
+                    icon = Icons.Rounded.Add,
+                    contentDescription = "Add songs",
+                    onClick = { onAddSongs(playlist) }
+                )
                 if (playlist.id > 0) {
                     LibraryCircularAction(
                         icon = Icons.Rounded.Edit,
                         contentDescription = "Edit playlist",
                         onClick = { onEditPlaylist(playlist) }
+                    )
+                }
+                if (playlist.id > 0 && playlist.isPublic) {
+                    LibraryCircularAction(
+                        icon = Icons.Rounded.Share,
+                        contentDescription = "Share playlist",
+                        onClick = { onSharePlaylist(playlist) }
                     )
                 }
                 LibraryCircularAction(
@@ -428,8 +499,30 @@ internal fun PlaylistDetailScreen(
                 )
             }
         } else {
+            item {
+                PlaylistDetailTools(
+                    query = query,
+                    onQueryChange = { query = it },
+                    sortMode = sortMode,
+                    onSortModeChange = { sortMode = it },
+                    totalCount = playlist.songs.size,
+                    visibleCount = visibleSongs.size
+                )
+            }
+
+            if (visibleSongs.isEmpty()) {
+                item {
+                    Text(
+                        text = "No songs match your search.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp)
+                    )
+                }
+            }
+
             itemsIndexed(
-                playlist.songs,
+                visibleSongs,
                 key = { index, song -> "playlist-song-${playlist.id}-$index-${song.id}" }
             ) { _, song ->
                 SongRow(
@@ -438,9 +531,103 @@ internal fun PlaylistDetailScreen(
                     onPlay = { onPlaySong(song) },
                     onAddToPlaylist = { onAddSongToPlaylist(song) },
                     onDownload = { onDownloadSong(song) },
+                    onShare = { onShareSong(song) },
                     onDelete = { onDeleteSong(song) },
                     showBackground = false
                 )
+            }
+        }
+    }
+}
+
+@Composable
+private fun PlaylistDetailTools(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    sortMode: PlaylistSortMode,
+    onSortModeChange: (PlaylistSortMode) -> Unit,
+    totalCount: Int,
+    visibleCount: Int
+) {
+    var showSortMenu by rememberSaveable { mutableStateOf(false) }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = query,
+            onValueChange = onQueryChange,
+            singleLine = true,
+            placeholder = { Text("Search in playlist") },
+            leadingIcon = {
+                Icon(
+                    imageVector = Icons.Rounded.Search,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            },
+            trailingIcon = {
+                if (query.isNotBlank()) {
+                    IconButton(onClick = { onQueryChange("") }) {
+                        Icon(
+                            imageVector = Icons.Rounded.Close,
+                            contentDescription = "Clear playlist search"
+                        )
+                    }
+                }
+            },
+            shape = LibraryTextFieldShape,
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f),
+                unfocusedContainerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.68f),
+                focusedBorderColor = Color.Transparent,
+                unfocusedBorderColor = Color.Transparent,
+                cursorColor = AppleMusicRed
+            )
+        )
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = if (visibleCount == totalCount) {
+                    itemCountText(totalCount, "song")
+                } else {
+                    "$visibleCount of ${itemCountText(totalCount, "song")}"
+                },
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.weight(1f)
+            )
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { showSortMenu = true }) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Rounded.Sort,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(Modifier.width(4.dp))
+                    Text(sortMode.label)
+                }
+                DropdownMenu(
+                    expanded = showSortMenu,
+                    onDismissRequest = { showSortMenu = false }
+                ) {
+                    PlaylistSortMode.entries.forEach { mode ->
+                        DropdownMenuItem(
+                            text = { Text(mode.label) },
+                            onClick = {
+                                onSortModeChange(mode)
+                                showSortMenu = false
+                            }
+                        )
+                    }
+                }
             }
         }
     }
@@ -457,10 +644,13 @@ internal fun SongCollectionDetailScreen(
     onPlaySong: (Song) -> Unit,
     onAddSongToPlaylist: (Song) -> Unit,
     onDownloadSong: (Song) -> Unit,
+    onShareSong: (Song) -> Unit,
+    onShareCollection: (() -> Unit)? = null,
     onCollapseBottomBar: () -> Unit,
     onExpandBottomBar: () -> Unit
 ) {
     val listState = rememberLazyListState()
+    val bottomContentPadding = LocalBottomBarContentPadding.current + 15.dp
     LaunchedEffect(listState) {
         var lastIndex = 0
         var lastOffset = 0
@@ -482,7 +672,7 @@ internal fun SongCollectionDetailScreen(
             .fillMaxSize()
             .background(Color.Black),
         state = listState,
-        contentPadding = PaddingValues(bottom = 24.dp),
+        contentPadding = PaddingValues(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         item {
@@ -492,7 +682,15 @@ internal fun SongCollectionDetailScreen(
                 subtitle = subtitle,
                 playEnabled = songs.isNotEmpty(),
                 onPlayClick = { songs.firstOrNull()?.let(onPlaySong) }
-            )
+            ) {
+                if (onShareCollection != null) {
+                    LibraryCircularAction(
+                        icon = Icons.Rounded.Share,
+                        contentDescription = "Share",
+                        onClick = onShareCollection
+                    )
+                }
+            }
         }
 
         if (songs.isEmpty()) {
@@ -515,6 +713,7 @@ internal fun SongCollectionDetailScreen(
                     onPlay = { onPlaySong(song) },
                     onAddToPlaylist = { onAddSongToPlaylist(song) },
                     onDownload = { onDownloadSong(song) },
+                    onShare = { onShareSong(song) },
                     showBackground = false
                 )
             }

@@ -65,10 +65,10 @@ Health check: `GET http://localhost:3000/health`
 - `POST /api/playlists/:id/songs`
 - `DELETE /api/playlists/:id/songs/:songId`
 
-### 7. Favorites
-- `GET /api/favorites`
-- `POST /api/favorites/:songId`
-- `DELETE /api/favorites/:songId`
+### 7. Library
+- `GET /api/library/songs`
+- `POST /api/library/songs`
+- `DELETE /api/library/songs/:songId`
 
 ### 8. Upload
 - `POST /api/upload/image` (Multer, chỉ nhận ảnh)
@@ -79,6 +79,6 @@ Health check: `GET http://localhost:3000/health`
 - Dùng `AppError` + `errorHandler` để trả lỗi nhất quán
 
 ## Ghi chú cập nhật gần đây
-- Sửa mismatch favorites: `songId` lấy từ param route (và vẫn tương thích body).
+- Chuyển saved/favorite library songs sang MySQL qua `/api/library/songs`.
 - Sửa users update/delete theo `:id`, có check quyền chỉ cho chính chủ.
 - Mở truy cập playlist public ở `GET /api/playlists/:id` bằng optional auth.

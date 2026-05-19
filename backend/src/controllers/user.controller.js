@@ -80,7 +80,8 @@ exports.updateUser = async (req, res, next) => {
         id: user.id,
         email: user.email,
         displayName: user.display_name,
-        avatarUrl: user.avatar_url
+        avatarUrl: user.avatar_url,
+        role: user.role || 'user'
       }
     });
   } catch (error) {

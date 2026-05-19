@@ -39,14 +39,14 @@ const getJwtRefreshSecret = () => {
   return process.env.JWT_REFRESH_SECRET;
 };
 
-const generateAccessToken = (userId, email) => jwt.sign(
-  { id: userId, email },
+const generateAccessToken = (userId, email, role = 'user') => jwt.sign(
+  { id: userId, email, role },
   getJwtSecret(),
   { expiresIn: process.env.JWT_EXPIRES_IN || '30d' }
 );
 
-const generateRefreshToken = (userId, email) => jwt.sign(
-  { id: userId, email },
+const generateRefreshToken = (userId, email, role = 'user') => jwt.sign(
+  { id: userId, email, role },
   getJwtRefreshSecret(),
   { expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || '90d' }
 );

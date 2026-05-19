@@ -28,7 +28,17 @@ android {
             ?: envProps.getProperty("GOOGLE_SERVER_CLIENT_ID")
             ?: envProps.getProperty("GOOGLE_CLIENT_ID")
             ?: ""
-        buildConfigField("String", "BASE_URL", "\"http://10.0.0.2:3000/\"")
+        val shareBaseUrl = providers.gradleProperty("SHARE_BASE_URL").orNull
+            ?: providers.environmentVariable("SHARE_BASE_URL").orNull
+            ?: envProps.getProperty("SHARE_BASE_URL")
+            ?: envProps.getProperty("APP_PUBLIC_URL")
+            ?: ""
+        val backendBaseUrl = providers.gradleProperty("BACKEND_BASE_URL").orNull
+            ?: providers.environmentVariable("BACKEND_BASE_URL").orNull
+            ?: envProps.getProperty("BACKEND_BASE_URL")
+            ?: ""
+        buildConfigField("String", "BASE_URL", "\"${backendBaseUrl.replace("\"", "\\\"")}\"")
+        buildConfigField("String", "SHARE_BASE_URL", "\"${shareBaseUrl.replace("\"", "\\\"")}\"")
         buildConfigField(
             "String",
             "GOOGLE_SERVER_CLIENT_ID",
@@ -40,7 +50,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -87,14 +98,10 @@ dependencies {
     implementation(libs.androidx.compose.material3)
     implementation("androidx.compose.material:material-icons-extended:1.7.6")
 
-    // ViewModel & LiveData
+    // ViewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.7")
-    implementation("androidx.lifecycle:lifecycle-livedata-ktx:2.8.7")
-
-    // Navigation Compose
-    implementation("androidx.navigation:navigation-compose:2.8.5")
+    implementation(libs.androidx.media3.session)
 
     // Kotlin Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
@@ -109,20 +116,16 @@ dependencies {
     // Media3 ExoPlayer (để phát nhạc)
     val media3Version = "1.5.0"
     implementation("androidx.media3:media3-exoplayer:$media3Version")
-    implementation("androidx.media3:media3-exoplayer-dash:$media3Version")
-    implementation("androidx.media3:media3-ui:$media3Version")
+    implementation("androidx.media3:media3-datasource:$media3Version")
+    implementation("androidx.media3:media3-database:$media3Version")
     implementation("androidx.media3:media3-session:$media3Version")
+    implementation("androidx.media3:media3-ui:$media3Version")
+    implementation("androidx.media:media:1.7.0")
 
     // Coil (load ảnh từ URL)
     implementation("io.coil-kt.coil3:coil-compose:3.0.4")
     implementation("io.coil-kt.coil3:coil-network-okhttp:3.0.4")
-
-    // DataStore (lưu preferences)
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
-
-    // Accompanist (Compose utilities)
-    implementation("com.google.accompanist:accompanist-permissions:0.36.0")
-    implementation("com.google.accompanist:accompanist-systemuicontroller:0.36.0")
+    implementation("io.coil-kt.coil3:coil-gif:3.0.4")
 
     // Gson (parse JSON)
     implementation("com.google.code.gson:gson:2.11.0")
@@ -130,12 +133,6 @@ dependencies {
     // OkHttp (networking)
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
-
-    // Timber (logging)
-    implementation("com.jakewharton.timber:timber:5.0.1")
-
-    // Splash Screen API
-    implementation("androidx.core:core-splashscreen:1.2.0-alpha02")
 
     // Testing
     testImplementation(libs.junit)

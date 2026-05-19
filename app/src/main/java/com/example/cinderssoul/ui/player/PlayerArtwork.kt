@@ -40,8 +40,8 @@ internal fun ArtworkBackground(imageUrl: String?, title: String) {
                 contentScale = ContentScale.Crop,
                 modifier = Modifier
                     .fillMaxSize()
-                    .blur(80.dp)
-                    .graphicsLayer(alpha = 0.9f)
+                    .blur(16.dp)
+                    .graphicsLayer(alpha = 0.64f)
             )
         }
         Box(

@@ -24,6 +24,7 @@ import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
 import androidx.compose.material.icons.rounded.RepeatOne
 import androidx.compose.material.icons.rounded.Replay10
+import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
 import androidx.compose.material3.Icon
@@ -63,7 +64,8 @@ internal fun NowPlayingScreen(
     onVolumeChange: (Float) -> Unit,
     onCycleRepeat: () -> Unit,
     onToggleLike: () -> Unit,
-    onAddSongToPlaylist: (Song) -> Unit
+    onAddSongToPlaylist: (Song) -> Unit,
+    onShareSong: (Song) -> Unit
 ) {
     val song = uiState.currentSong ?: return
     val duration = uiState.durationMs.takeIf { it > 0L } ?: 1L
@@ -156,6 +158,13 @@ internal fun NowPlayingScreen(
                     Icon(
                         Icons.AutoMirrored.Rounded.PlaylistAdd,
                         contentDescription = "Add to playlist",
+                        modifier = Modifier.size(34.dp)
+                    )
+                }
+                IconButton(onClick = { onShareSong(song) }, modifier = Modifier.size(50.dp)) {
+                    Icon(
+                        Icons.Rounded.Share,
+                        contentDescription = "Share song",
                         modifier = Modifier.size(34.dp)
                     )
                 }

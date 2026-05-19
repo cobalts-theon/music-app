@@ -3,9 +3,12 @@ package com.example.cinderssoul
 import android.app.DownloadManager
 import android.app.Application
 import android.content.Context
+import android.content.Intent
+import android.app.PendingIntent
 import android.net.Uri
 import android.os.Environment
 import android.provider.Settings
+import android.util.Patterns
 import android.webkit.URLUtil
 import android.webkit.MimeTypeMap
 import androidx.compose.runtime.State
@@ -14,16 +17,22 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.PlaybackException
+import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.cache.CacheDataSource
+import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
+import androidx.media3.datasource.cache.SimpleCache
 import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
+import androidx.media3.session.MediaSession
 import com.example.cinderssoul.local.DownloadedSongEntity
-import com.example.cinderssoul.local.FavoriteSongEntity
 import com.example.cinderssoul.local.ListeningHistoryEntity
 import com.example.cinderssoul.local.MusicCacheDao
 import com.example.cinderssoul.models.Album
@@ -39,8 +48,11 @@ import com.example.cinderssoul.network.LoginRequest
 import com.example.cinderssoul.network.RefreshTokenRequest
 import com.example.cinderssoul.network.RegisterRequest
 import com.example.cinderssoul.network.ResetPasswordRequest
+import com.example.cinderssoul.network.ShareLinks
 import com.example.cinderssoul.network.UpdateUserRequest
+import com.example.cinderssoul.network.toApiMessage
 import com.example.cinderssoul.network.toDomainUser
+import com.example.cinderssoul.repository.LibraryRepository
 import com.example.cinderssoul.repository.SongRepository
 import com.example.cinderssoul.repository.PlaylistRepository
 import kotlinx.coroutines.Job
@@ -55,12 +67,14 @@ import okhttp3.MultipartBody
 import okhttp3.RequestBody.Companion.asRequestBody
 import retrofit2.HttpException
 import java.io.File
+import java.util.concurrent.atomic.AtomicReference
 import kotlin.random.Random
 
 class MusicViewModel(
     application: Application,
     private val songRepository: SongRepository,
     private val playlistRepository: PlaylistRepository = PlaylistRepository(),
+    private val libraryRepository: LibraryRepository = LibraryRepository(),
     private val musicCacheDao: MusicCacheDao? = null
 ) : AndroidViewModel(application) {
     private data class RestoredPlayback(
@@ -73,34 +87,72 @@ class MusicViewModel(
         private const val PLAYER_PREFS = "player_state"
         private const val KEY_LAST_SONG_ID = "last_song_id"
         private const val KEY_LAST_POSITION_MS = "last_position_ms"
-        private const val KEY_DOWNLOADED_SONG_IDS = "downloaded_song_ids"
+        private const val KEY_DOWNLOADED_SONG_IDS_PREFIX = "downloaded_song_ids_user_"
+        private const val KEY_MIGRATED_ROOM_FAVORITES_PREFIX = "migrated_room_favorites_user_"
         private const val KEY_API_ACCESS_TOKEN = "api_access_token"
         private const val KEY_API_REFRESH_TOKEN = "api_refresh_token"
         private const val KEY_APP_ACCOUNT_EMAIL = "app_account_email"
         private const val KEY_APP_ACCOUNT_PASSWORD = "app_account_password"
         private const val KEY_EXPLICIT_AUTH = "explicit_auth"
+        private const val KEY_AUTH_USER_ID = "auth_user_id"
+        private const val KEY_AUTH_USER_EMAIL = "auth_user_email"
+        private const val KEY_AUTH_USER_DISPLAY_NAME = "auth_user_display_name"
+        private const val KEY_AUTH_USER_AVATAR_URL = "auth_user_avatar_url"
+        private const val KEY_AUTH_USER_ROLE = "auth_user_role"
+        private const val KEY_AUTH_USER_CREATED_AT = "auth_user_created_at"
+        private const val GUEST_LIBRARY_USER_ID = 0
         private const val FAVORITE_PLAYLIST_ID = -100
         private const val HISTORY_LIMIT = 200
+        private const val AUDIO_CACHE_MAX_BYTES = 160L * 1024L * 1024L
+        private const val PROGRESS_UPDATE_PLAYING_MS = 1_000L
+        private const val PROGRESS_UPDATE_IDLE_MS = 2_500L
+    }
+
+    private object AudioCacheHolder {
+        private val cacheRef = AtomicReference<SimpleCache?>()
+
+        fun get(context: Context): SimpleCache {
+            cacheRef.get()?.let { return it }
+
+            synchronized(this) {
+                cacheRef.get()?.let { return it }
+                val appContext = context.applicationContext
+                val cache = SimpleCache(
+                    File(appContext.cacheDir, "audio_stream_cache"),
+                    LeastRecentlyUsedCacheEvictor(AUDIO_CACHE_MAX_BYTES),
+                    StandaloneDatabaseProvider(appContext)
+                )
+                cacheRef.set(cache)
+                return cache
+            }
+        }
     }
 
     private val mediaHttpDataSourceFactory = DefaultHttpDataSource.Factory()
         .setAllowCrossProtocolRedirects(true)
-        .setConnectTimeoutMs(20_000)
-        .setReadTimeoutMs(45_000)
+        .setConnectTimeoutMs(12_000)
+        .setReadTimeoutMs(25_000)
+        .setDefaultRequestProperties(mapOf("Accept-Encoding" to "identity"))
         .setUserAgent("CindersSoul/1.0")
+
+    private val mediaDataSourceFactory = CacheDataSource.Factory()
+        .setCache(AudioCacheHolder.get(application))
+        .setUpstreamDataSourceFactory(mediaHttpDataSourceFactory)
+        .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
     private val loadControl = DefaultLoadControl.Builder()
         .setBufferDurationsMs(
-            30_000,
-            120_000,
-            2_500,
-            5_000
+            15_000,
+            60_000,
+            1_200,
+            3_000
         )
         .setPrioritizeTimeOverSizeThresholds(true)
+        .setBackBuffer(30_000, true)
         .build()
 
     val exoPlayer: ExoPlayer = ExoPlayer.Builder(application)
-        .setMediaSourceFactory(DefaultMediaSourceFactory(mediaHttpDataSourceFactory))
+        .setMediaSourceFactory(DefaultMediaSourceFactory(mediaDataSourceFactory))
         .setLoadControl(loadControl)
         .build()
         .apply {
@@ -120,6 +172,54 @@ class MusicViewModel(
     private val _uiState = mutableStateOf(MusicUiState(volume = exoPlayer.volume))
     val uiState: State<MusicUiState> = _uiState
 
+    private val sessionPlayer: Player = object : ForwardingPlayer(exoPlayer) {
+        override fun seekToNextMediaItem() {
+            playNextSong()
+        }
+
+        override fun seekToPreviousMediaItem() {
+            playPreviousSong()
+        }
+
+        override fun hasNextMediaItem(): Boolean {
+            return _uiState.value.songs.size > 1
+        }
+
+        override fun hasPreviousMediaItem(): Boolean {
+            return _uiState.value.songs.size > 1
+        }
+
+        override fun getAvailableCommands(): Player.Commands {
+            val base = super.getAvailableCommands()
+            val builder = Player.Commands.Builder().addAll(base)
+            if (_uiState.value.songs.size > 1) {
+                builder.add(Player.COMMAND_SEEK_TO_NEXT_MEDIA_ITEM)
+                    .add(Player.COMMAND_SEEK_TO_PREVIOUS_MEDIA_ITEM)
+            }
+            return builder.build()
+        }
+    }
+
+    private val sessionActivityIntent: PendingIntent = PendingIntent.getActivity(
+        application,
+        0,
+        Intent(application, MainActivity::class.java).apply {
+            flags = Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_CLEAR_TOP
+        },
+        PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+    )
+
+    private val mediaSession: MediaSession = MediaSession.Builder(application, sessionPlayer)
+        .setSessionActivity(sessionActivityIntent)
+        .build()
+
+    private val playbackNotificationManager = PlaybackNotificationManager(
+        context = application,
+        mediaSession = mediaSession,
+        player = sessionPlayer,
+        contentIntent = sessionActivityIntent
+    )
+
     private var progressJob: Job? = null
     private var spinEffectJob: Job? = null
     private val playerPrefs = application.getSharedPreferences(PLAYER_PREFS, Context.MODE_PRIVATE)
@@ -130,12 +230,14 @@ class MusicViewModel(
     private var customPlaylists: List<Playlist> = emptyList()
     private val playlistOverrides = mutableMapOf<Int, Playlist>()
     private var favoriteSongIds: List<Int> = emptyList()
+    private val runningLegacyFavoriteMigrations = mutableSetOf<Int>()
+    private var activeLibraryUserId = GUEST_LIBRARY_USER_ID
 
     init {
         ApiClient.setAccessToken(playerPrefs.getString(KEY_API_ACCESS_TOKEN, null))
-        downloadedSongIds = loadDownloadedSongIds()
-        _uiState.value = _uiState.value.copy(downloadedSongIds = downloadedSongIds)
-        restoreOfflineLibraryState()
+        if (!restoreCachedAuthUserSession()) {
+            restoreOfflineLibraryState()
+        }
         restoreExplicitAuthUser()
 
         exoPlayer.addListener(
@@ -168,8 +270,9 @@ class MusicViewModel(
     }
 
     fun signInWithEmail(email: String, password: String) {
-        if (email.isBlank() || password.isBlank()) {
-            setAuthMessage("Email and password are required.")
+        val validationMessage = validateLoginInput(email, password)
+        if (validationMessage != null) {
+            setAuthMessage(validationMessage)
             return
         }
 
@@ -186,8 +289,9 @@ class MusicViewModel(
     }
 
     fun registerWithEmail(email: String, password: String, displayName: String) {
-        if (email.isBlank() || password.isBlank() || displayName.isBlank()) {
-            setAuthMessage("Name, email, and password are required.")
+        val validationMessage = validateRegisterInput(email, password, displayName)
+        if (validationMessage != null) {
+            setAuthMessage(validationMessage)
             return
         }
 
@@ -224,8 +328,9 @@ class MusicViewModel(
     }
 
     fun requestPasswordResetOtp(email: String) {
-        if (email.isBlank()) {
-            setAuthMessage("Email is required.")
+        val validationMessage = validateEmailInput(email)
+        if (validationMessage != null) {
+            setAuthMessage(validationMessage)
             return
         }
 
@@ -234,16 +339,16 @@ class MusicViewModel(
                 val response = ApiClient.apiService.requestPasswordResetOtp(
                     ForgotPasswordRequest(email = email.trim())
                 )
-                val data = response.data ?: throw IllegalStateException(response.message ?: "Unable to send OTP")
-                _uiState.value = _uiState.value.copy(passwordResetDevOtp = data.devOtp)
-                data.devOtp?.let { "OTP sent. Dev code: $it" } ?: "OTP sent."
+                response.data ?: throw IllegalStateException(response.message ?: "Unable to send OTP")
+                "OTP sent to your email."
             }
         }
     }
 
     fun resetPasswordWithOtp(email: String, otp: String, newPassword: String) {
-        if (email.isBlank() || otp.isBlank() || newPassword.isBlank()) {
-            setAuthMessage("Email, OTP, and new password are required.")
+        val validationMessage = validateResetPasswordInput(email, otp, newPassword)
+        if (validationMessage != null) {
+            setAuthMessage(validationMessage)
             return
         }
 
@@ -277,6 +382,7 @@ class MusicViewModel(
                 )
                 val updatedUser = response.requireData().toDomainUser()
                 _uiState.value = _uiState.value.copy(authUser = updatedUser)
+                cacheAuthUser(updatedUser)
                 "Profile updated."
             }
         }
@@ -294,6 +400,7 @@ class MusicViewModel(
                 )
                 val updatedUser = response.requireData().toDomainUser()
                 _uiState.value = _uiState.value.copy(authUser = updatedUser)
+                cacheAuthUser(updatedUser)
                 "Avatar updated."
             }
         }
@@ -329,6 +436,13 @@ class MusicViewModel(
             val error = userResult.exceptionOrNull()
 
             if (showLoading) {
+                user?.let { fetchedUser ->
+                    cacheAuthUser(fetchedUser)
+                    if (activeLibraryUserId != fetchedUser.id) {
+                        switchLibraryOwner(fetchedUser.id)
+                        refreshData()
+                    }
+                }
                 _uiState.value = _uiState.value.copy(
                     isAuthLoading = false,
                     authUser = user ?: _uiState.value.authUser,
@@ -336,6 +450,11 @@ class MusicViewModel(
                 )
             } else {
                 if (user != null) {
+                    cacheAuthUser(user)
+                    if (activeLibraryUserId != user.id) {
+                        switchLibraryOwner(user.id)
+                        refreshData()
+                    }
                     _uiState.value = _uiState.value.copy(authUser = user, authMessage = null)
                 } else if (error != null && !error.isUnauthorized()) {
                     _uiState.value = _uiState.value.copy(authMessage = error.message)
@@ -359,8 +478,10 @@ class MusicViewModel(
         if (result.isFailure && result.exceptionOrNull().isUnauthorized()) {
             val refreshed = refreshAccessToken()
             if (refreshed.isFailure) {
-                clearStoredAuthSession()
                 val exception = refreshed.exceptionOrNull() ?: IllegalStateException("Session expired. Please log in again.")
+                if (exception.requiresAuthSessionReset()) {
+                    clearStoredAuthSession()
+                }
                 return Result.failure(exception)
             }
 
@@ -382,7 +503,7 @@ class MusicViewModel(
         val result = runCatching { action() }
         _uiState.value = _uiState.value.copy(
             isAuthLoading = false,
-            authMessage = result.getOrElse { it.message ?: "Authentication failed" }
+            authMessage = result.getOrElse { it.toApiMessage("Authentication failed.") }
         )
     }
 
@@ -390,28 +511,91 @@ class MusicViewModel(
         _uiState.value = _uiState.value.copy(authMessage = message)
     }
 
-    private fun applyAuthSession(authData: com.example.cinderssoul.network.AuthDataDto, explicitUser: Boolean) {
-        saveAuthSession(authData.accessToken, authData.refreshToken, explicitUser = explicitUser)
-        _uiState.value = _uiState.value.copy(
-            authUser = authData.user.toDomainUser(),
-            passwordResetDevOtp = null
-        )
+    private fun validateLoginInput(email: String, password: String): String? {
+        return validateEmailInput(email)
+            ?: when {
+                password.isBlank() -> "Password is required."
+                else -> null
+            }
     }
 
-    private fun restoreOfflineLibraryState() {
+    private fun validateRegisterInput(email: String, password: String, displayName: String): String? {
+        return when {
+            displayName.isBlank() -> "Display name is required."
+            else -> validateLoginInput(email, password)
+                ?: if (password.length < 6) "Password must be at least 6 characters long." else null
+        }
+    }
+
+    private fun validateResetPasswordInput(email: String, otp: String, newPassword: String): String? {
+        return validateEmailInput(email)
+            ?: when {
+                otp.isBlank() -> "OTP is required."
+                !otp.trim().matches(Regex("^\\d{6}$")) -> "OTP must be 6 digits."
+                newPassword.isBlank() -> "New password is required."
+                newPassword.length < 6 -> "New password must be at least 6 characters long."
+                else -> null
+            }
+    }
+
+    private fun validateEmailInput(email: String): String? {
+        val trimmedEmail = email.trim()
+        return when {
+            trimmedEmail.isBlank() -> "Email is required."
+            !Patterns.EMAIL_ADDRESS.matcher(trimmedEmail).matches() -> "Please enter a valid email address."
+            else -> null
+        }
+    }
+
+    private fun applyAuthSession(authData: com.example.cinderssoul.network.AuthDataDto, explicitUser: Boolean) {
+        val user = authData.user.toDomainUser()
+        saveAuthSession(
+            accessToken = authData.accessToken,
+            refreshToken = authData.refreshToken,
+            explicitUser = explicitUser,
+            user = user
+        )
+        _uiState.value = _uiState.value.copy(
+            authUser = user
+        )
+        switchLibraryOwner(user.id)
+        refreshData()
+    }
+
+    private fun currentLibraryUserId(): Int {
+        return _uiState.value.authUser?.id ?: GUEST_LIBRARY_USER_ID
+    }
+
+    private fun switchLibraryOwner(userId: Int) {
+        activeLibraryUserId = userId
+        backendPlaylists = emptyList()
+        customPlaylists = emptyList()
+        playlistOverrides.clear()
+        favoriteSongIds = emptyList()
+        downloadedSongIds = emptySet()
+        _uiState.value = _uiState.value.copy(
+            playlists = composePlaylists(_uiState.value.songs),
+            downloadedSongIds = downloadedSongIds,
+            isCurrentLiked = false
+        )
+        restoreOfflineLibraryState(userId)
+    }
+
+    private fun restoreOfflineLibraryState(userId: Int = currentLibraryUserId()) {
         val dao = musicCacheDao ?: return
-        val legacyDownloadedIds = downloadedSongIds
+        val scopedDownloadedIds = loadDownloadedSongIds(userId)
 
         viewModelScope.launch {
-            val (roomFavoriteIds, roomDownloadedIds) = withContext(Dispatchers.IO) {
-                legacyDownloadedIds.forEach { songId ->
-                    dao.upsertDownloadedSong(DownloadedSongEntity(songId = songId))
+            val roomDownloadedIds = withContext(Dispatchers.IO) {
+                scopedDownloadedIds.forEach { songId ->
+                    dao.upsertDownloadedSong(DownloadedSongEntity(userId = userId, songId = songId))
                 }
-                dao.getFavoriteSongIds() to dao.getDownloadedSongIds()
+                dao.getDownloadedSongIds(userId)
             }
 
-            favoriteSongIds = roomFavoriteIds
-            downloadedSongIds = (roomDownloadedIds + legacyDownloadedIds).toSet()
+            if (activeLibraryUserId != userId) return@launch
+
+            downloadedSongIds = (roomDownloadedIds + scopedDownloadedIds).toSet()
             _uiState.value = _uiState.value.copy(
                 downloadedSongIds = downloadedSongIds,
                 isCurrentLiked = isFavoriteSong(_uiState.value.currentSong)
@@ -422,30 +606,70 @@ class MusicViewModel(
 
     fun refreshData() {
         viewModelScope.launch {
+            val requestLibraryUserId = activeLibraryUserId
             _uiState.value = _uiState.value.copy(isLoading = true, errorMessage = null)
 
             val songsDeferred = async { songRepository.getAllSongs(limit = 80) }
             val artistsDeferred = async { songRepository.getAllArtists(limit = 20) }
             val albumsDeferred = async { songRepository.getAllAlbums(limit = 20) }
+            val hasAccountLibrary = requestLibraryUserId != GUEST_LIBRARY_USER_ID
             val playlistsDeferred = async {
-                withPlaylistAuth {
+                if (hasAccountLibrary) withPlaylistAuth {
                     playlistRepository.getUserPlaylists()
+                } else {
+                    Result.success(emptyList())
                 }
+            }
+            val librarySongsDeferred = async {
+                if (hasAccountLibrary) withPlaylistAuth {
+                    libraryRepository.getLibrarySongs()
+                } else {
+                    Result.success(emptyList())
+                }
+            }
+            val legacyFavoriteIdsDeferred = async {
+                legacyRoomFavoriteIdsForMigration(
+                    userId = requestLibraryUserId,
+                    hasAccountLibrary = hasAccountLibrary
+                )
             }
 
             val songsResult = songsDeferred.await()
             val artistsResult = artistsDeferred.await()
             val albumsResult = albumsDeferred.await()
             val playlistsResult = playlistsDeferred.await()
+            val librarySongsResult = librarySongsDeferred.await()
+            val legacyFavoriteIds = legacyFavoriteIdsDeferred.await()
 
-            val error = listOf(songsResult, artistsResult, albumsResult)
+            val error = listOf(songsResult, artistsResult, albumsResult, librarySongsResult)
                 .firstOrNull { it.isFailure }
                 ?.exceptionOrNull()
                 ?.message
 
-            val songs = songsResult.getOrDefault(emptyList())
-            playlistsResult.getOrNull()?.let { fetchedPlaylists ->
-                backendPlaylists = fetchedPlaylists
+            val librarySongs = if (hasAccountLibrary) {
+                librarySongsResult.getOrNull().orEmpty()
+            } else {
+                emptyList()
+            }
+            if (activeLibraryUserId != requestLibraryUserId) {
+                _uiState.value = _uiState.value.copy(isLoading = false)
+                return@launch
+            }
+            if (librarySongsResult.isSuccess || !hasAccountLibrary) {
+                favoriteSongIds = (librarySongs.map { it.id } + legacyFavoriteIds).distinct()
+            }
+            migrateLegacyRoomFavoritesToBackend(requestLibraryUserId, legacyFavoriteIds)
+
+            val songs = mergeSongs(
+                primarySongs = songsResult.getOrDefault(emptyList()),
+                extraSongs = librarySongs
+            )
+
+            val fetchedPlaylists = playlistsResult.getOrNull()
+            backendPlaylists = if (fetchedPlaylists != null && requestLibraryUserId != GUEST_LIBRARY_USER_ID) {
+                fetchedPlaylists.filter { it.userId == requestLibraryUserId }
+            } else {
+                emptyList()
             }
             val playlists = composePlaylists(songs)
             val currentSongId = _uiState.value.currentSong?.id
@@ -492,6 +716,7 @@ class MusicViewModel(
             return
         }
 
+        val requestLibraryUserId = activeLibraryUserId
         viewModelScope.launch {
             val uploadedCoverUrl = imageUri?.let { selectedImage ->
                 withPlaylistAuth {
@@ -504,11 +729,15 @@ class MusicViewModel(
                     name = trimmedName,
                     description = description?.trim()?.takeIf { it.isNotBlank() },
                     coverUrl = uploadedCoverUrl,
-                    isPublic = true
+                    isPublic = false
                 )
             }
 
             val created = result.getOrNull()
+            if (activeLibraryUserId != requestLibraryUserId) {
+                onResult(null)
+                return@launch
+            }
             if (created != null) {
                 backendPlaylists = listOf(created) + backendPlaylists.filterNot { it.id == created.id }
                 updatePlaylistState()
@@ -532,11 +761,13 @@ class MusicViewModel(
 
         applyPlaylistUpdate(updated)
         if (playlistId > 0) {
+            val requestLibraryUserId = activeLibraryUserId
             viewModelScope.launch {
                 val result = withPlaylistAuth {
                     playlistRepository.addSongToPlaylist(playlistId, song.id)
                 }
 
+                if (activeLibraryUserId != requestLibraryUserId) return@launch
                 if (result.isSuccess) {
                     syncPlaylistFromBackend(playlistId)
                 } else {
@@ -561,11 +792,13 @@ class MusicViewModel(
 
         applyPlaylistUpdate(updated)
         if (playlistId > 0) {
+            val requestLibraryUserId = activeLibraryUserId
             viewModelScope.launch {
                 val result = withPlaylistAuth {
                     playlistRepository.removeSongFromPlaylist(playlistId, song.id)
                 }
 
+                if (activeLibraryUserId != requestLibraryUserId) return@launch
                 if (result.isSuccess) {
                     syncPlaylistFromBackend(playlistId)
                 } else {
@@ -577,8 +810,13 @@ class MusicViewModel(
     }
 
     private fun addSongToFavorites(song: Song): Boolean {
+        if (activeLibraryUserId == GUEST_LIBRARY_USER_ID) {
+            setAuthMessage("Please log in to save songs to your library.")
+            return false
+        }
         if (song.id in favoriteSongIds) return false
 
+        val previousFavoriteSongIds = favoriteSongIds
         favoriteSongIds = listOf(song.id) + favoriteSongIds.filterNot { it == song.id }
         _uiState.value = _uiState.value.copy(
             isCurrentLiked = if (_uiState.value.currentSong?.id == song.id) {
@@ -588,13 +826,18 @@ class MusicViewModel(
             }
         )
         updatePlaylistState()
-        persistFavoriteSong(song.id, isFavorite = true)
+        syncFavoriteSong(song.id, isFavorite = true, previousFavoriteSongIds)
         return true
     }
 
     private fun removeSongFromFavorites(song: Song): Boolean {
+        if (activeLibraryUserId == GUEST_LIBRARY_USER_ID) {
+            setAuthMessage("Please log in to update your library.")
+            return false
+        }
         if (song.id !in favoriteSongIds) return false
 
+        val previousFavoriteSongIds = favoriteSongIds
         favoriteSongIds = favoriteSongIds.filterNot { it == song.id }
         _uiState.value = _uiState.value.copy(
             isCurrentLiked = if (_uiState.value.currentSong?.id == song.id) {
@@ -604,17 +847,40 @@ class MusicViewModel(
             }
         )
         updatePlaylistState()
-        persistFavoriteSong(song.id, isFavorite = false)
+        syncFavoriteSong(song.id, isFavorite = false, previousFavoriteSongIds)
         return true
     }
 
-    private fun persistFavoriteSong(songId: Int, isFavorite: Boolean) {
-        val dao = musicCacheDao ?: return
-        viewModelScope.launch(Dispatchers.IO) {
-            if (isFavorite) {
-                dao.upsertFavoriteSong(FavoriteSongEntity(songId = songId))
+    private fun syncFavoriteSong(
+        songId: Int,
+        isFavorite: Boolean,
+        previousFavoriteSongIds: List<Int>
+    ) {
+        val userId = activeLibraryUserId
+        viewModelScope.launch {
+            val result = withPlaylistAuth {
+                if (isFavorite) {
+                    libraryRepository.addSongToLibrary(songId).map { Unit }
+                } else {
+                    libraryRepository.removeSongFromLibrary(songId)
+                }
+            }
+
+            if (activeLibraryUserId != userId) return@launch
+            if (result.isFailure) {
+                favoriteSongIds = previousFavoriteSongIds
+                val syncMessage = result.exceptionOrNull()
+                    ?.toApiMessage("Unable to sync your library.")
+                    ?: "Unable to sync your library."
+                _uiState.value = _uiState.value.copy(
+                    isCurrentLiked = isFavoriteSong(_uiState.value.currentSong),
+                    authMessage = syncMessage
+                )
+                updatePlaylistState()
             } else {
-                dao.deleteFavoriteSong(songId)
+                _uiState.value = _uiState.value.copy(
+                    isCurrentLiked = isFavoriteSong(_uiState.value.currentSong)
+                )
             }
         }
     }
@@ -627,15 +893,18 @@ class MusicViewModel(
 
         applyPlaylistUpdate(updated)
         if (playlistId > 0) {
+            val requestLibraryUserId = activeLibraryUserId
             viewModelScope.launch {
                 val uploadResult = withPlaylistAuth {
                     uploadPlaylistCoverImage(selectedImageUri)
                 }
 
+                if (activeLibraryUserId != requestLibraryUserId) return@launch
                 val uploadedUrl = uploadResult.getOrNull() ?: return@launch
                 val updateResult = withPlaylistAuth {
                     playlistRepository.updatePlaylist(playlistId = playlistId, coverUrl = uploadedUrl)
                 }
+                if (activeLibraryUserId != requestLibraryUserId) return@launch
                 updateResult.getOrNull()?.let { synced ->
                     val hydrated = synced.copy(
                         songs = synced.songs.takeIf { it.isNotEmpty() } ?: updated.songs
@@ -669,11 +938,13 @@ class MusicViewModel(
         )
 
         applyPlaylistUpdate(optimistic)
+        val requestLibraryUserId = activeLibraryUserId
         viewModelScope.launch {
             val uploadedCoverUrl = imageUri?.let { selectedImage ->
                 val uploadResult = withPlaylistAuth {
                     uploadPlaylistCoverImage(selectedImage)
                 }
+                if (activeLibraryUserId != requestLibraryUserId) return@launch
                 if (uploadResult.isFailure) {
                     applyPlaylistUpdate(existing)
                     return@launch
@@ -690,6 +961,7 @@ class MusicViewModel(
                 )
             }
 
+            if (activeLibraryUserId != requestLibraryUserId) return@launch
             updateResult
                 .onSuccess { synced ->
                     val hydrated = synced.copy(
@@ -708,24 +980,98 @@ class MusicViewModel(
     fun deletePlaylist(playlistId: Int): Boolean {
         if (playlistId == FAVORITE_PLAYLIST_ID) return false
 
+        val previousPlaylists = _uiState.value.playlists
         val existing = _uiState.value.playlists.firstOrNull { it.id == playlistId } ?: return false
-        
-        val remainingPlaylists = _uiState.value.playlists.filterNot { it.id == playlistId }
+
+        val previousBackendPlaylists = backendPlaylists
+        val previousCustomPlaylists = customPlaylists
+        val previousPlaylistOverrides = playlistOverrides.toMap()
+        val remainingPlaylists = previousPlaylists.filterNot { it.id == playlistId }
+        backendPlaylists = backendPlaylists.filterNot { it.id == playlistId }
+        customPlaylists = customPlaylists.filterNot { it.id == playlistId }
+        playlistOverrides.remove(playlistId)
         _uiState.value = _uiState.value.copy(playlists = remainingPlaylists)
-        
+
         if (playlistId > 0) {
+            val requestLibraryUserId = activeLibraryUserId
             viewModelScope.launch {
                 val result = withPlaylistAuth {
                     playlistRepository.deletePlaylist(playlistId)
                 }
-                
+
+                if (activeLibraryUserId != requestLibraryUserId) return@launch
                 if (result.isFailure) {
-                    val allPlaylists = _uiState.value.playlists + existing
-                    _uiState.value = _uiState.value.copy(playlists = allPlaylists)
+                    val error = result.exceptionOrNull()
+                    if (error.isNotFound()) return@launch
+
+                    backendPlaylists = previousBackendPlaylists
+                    customPlaylists = previousCustomPlaylists
+                    playlistOverrides.clear()
+                    playlistOverrides.putAll(previousPlaylistOverrides)
+                    _uiState.value = _uiState.value.copy(
+                        playlists = previousPlaylists,
+                        authMessage = error?.toApiMessage("Unable to delete playlist.")
+                            ?: "Unable to delete playlist."
+                    )
                 }
             }
         }
         return true
+    }
+
+    fun shareSong(song: Song) {
+        shareLink(
+            subject = song.title,
+            text = "${song.title} - ${song.artistName}\n${ShareLinks.song(song.id)}"
+        )
+    }
+
+    fun shareAlbum(album: Album) {
+        shareLink(
+            subject = album.title,
+            text = "${album.title}\n${ShareLinks.album(album.id)}"
+        )
+    }
+
+    fun shareArtist(artist: Artist) {
+        shareLink(
+            subject = artist.name,
+            text = "${artist.name}\n${ShareLinks.artist(artist.id)}"
+        )
+    }
+
+    fun shareCurrentProfile(): Boolean {
+        val user = _uiState.value.authUser ?: return false
+        shareLink(
+            subject = user.displayName,
+            text = "${user.displayName}\n${ShareLinks.user(user.id)}"
+        )
+        return true
+    }
+
+    fun sharePlaylist(playlist: Playlist): Boolean {
+        if (playlist.id <= 0) return false
+        if (!playlist.isPublic) {
+            setAuthMessage("Only public playlists can be shared.")
+            return false
+        }
+
+        shareLink(
+            subject = playlist.name,
+            text = "${playlist.name}\n${ShareLinks.playlist(playlist.id)}"
+        )
+        return true
+    }
+
+    private fun shareLink(subject: String, text: String) {
+        val shareIntent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, subject)
+            putExtra(Intent.EXTRA_TEXT, text)
+        }
+        val chooser = Intent.createChooser(shareIntent, "Share")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        getApplication<Application>().startActivity(chooser)
     }
 
     fun downloadSong(song: Song): Boolean {
@@ -903,11 +1249,7 @@ class MusicViewModel(
         }
 
         try {
-            val mediaItem = MediaItem.Builder()
-                .setUri(playableUri)
-                .setMediaId(song.id.toString())
-                .setMimeType(mimeTypeFor(playableUri))
-                .build()
+            val mediaItem = buildMediaItem(song, playableUri)
 
             exoPlayer.stop()
             exoPlayer.clearMediaItems()
@@ -975,6 +1317,22 @@ class MusicViewModel(
         }
     }
 
+    private fun buildMediaItem(song: Song, playableUri: Uri): MediaItem {
+        val metadataBuilder = MediaMetadata.Builder()
+            .setTitle(song.title)
+            .setArtist(song.artistName)
+            .setAlbumTitle(song.albumTitle)
+        song.coverUrl?.let { coverUrl ->
+            metadataBuilder.setArtworkUri(Uri.parse(coverUrl))
+        }
+        return MediaItem.Builder()
+            .setUri(playableUri)
+            .setMediaId(song.id.toString())
+            .setMimeType(mimeTypeFor(playableUri))
+            .setMediaMetadata(metadataBuilder.build())
+            .build()
+    }
+
     private fun reportPlaybackError(message: String, exception: Throwable? = null) {
         runCatching {
             exoPlayer.stop()
@@ -990,7 +1348,7 @@ class MusicViewModel(
         progressJob = viewModelScope.launch {
             while (isActive) {
                 syncPlayerState()
-                delay(350L)
+                delay(if (exoPlayer.isPlaying) PROGRESS_UPDATE_PLAYING_MS else PROGRESS_UPDATE_IDLE_MS)
             }
         }
     }
@@ -1001,14 +1359,23 @@ class MusicViewModel(
             .coerceAtLeast(0L)
             .coerceAtMost(if (duration > 0L) duration else Long.MAX_VALUE)
 
-        _uiState.value = _uiState.value.copy(
+        val positionForUi = if (exoPlayer.isPlaying) {
+            (position / 1_000L) * 1_000L
+        } else {
+            position
+        }
+        val currentState = _uiState.value
+        val nextState = currentState.copy(
             isPlayerRunning = exoPlayer.isPlaying,
-            positionMs = position,
+            positionMs = positionForUi,
             durationMs = duration,
             volume = exoPlayer.volume.coerceIn(0f, 1f),
             isShuffleEnabled = exoPlayer.shuffleModeEnabled,
             repeatMode = exoPlayer.repeatMode.toUiRepeatMode()
         )
+        if (nextState != currentState) {
+            _uiState.value = nextState
+        }
 
         val currentSong = _uiState.value.currentSong
         if (currentSong != null) {
@@ -1040,9 +1407,14 @@ class MusicViewModel(
         _uiState.value = _uiState.value.copy(playlists = composePlaylists(_uiState.value.songs))
     }
 
+    private fun mergeSongs(primarySongs: List<Song>, extraSongs: List<Song>): List<Song> {
+        if (extraSongs.isEmpty()) return primarySongs
+        return (primarySongs + extraSongs).distinctBy { it.id }
+    }
+
     private fun composePlaylists(songs: List<Song>): List<Playlist> {
         val serverPlaylists = backendPlaylists.filterNot { it.isLegacyFavoritesPlaylist() }
-        val base = (listOf(buildFavoritePlaylist(songs)) + serverPlaylists + customPlaylists + buildQuickPlaylists(songs))
+        val base = (listOf(buildFavoritePlaylist(songs)) + serverPlaylists + customPlaylists)
             .distinctBy { it.id }
         return base.map { playlistOverrides[it.id] ?: it }
     }
@@ -1053,9 +1425,13 @@ class MusicViewModel(
 
         return Playlist(
             id = FAVORITE_PLAYLIST_ID,
-            userId = 0,
+            userId = activeLibraryUserId,
             name = "Favorite",
-            description = "Saved on this device",
+            description = if (activeLibraryUserId == GUEST_LIBRARY_USER_ID) {
+                "Saved on this device"
+            } else {
+                "Saved to this account"
+            },
             coverUrl = favoriteSongs.firstOrNull()?.coverUrl,
             isPublic = false,
             songs = favoriteSongs
@@ -1113,6 +1489,7 @@ class MusicViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             dao.addListeningHistory(
                 ListeningHistoryEntity(
+                    userId = activeLibraryUserId,
                     songId = song.id,
                     positionMs = positionMs
                 ),
@@ -1125,6 +1502,9 @@ class MusicViewModel(
         if (updated.id == FAVORITE_PLAYLIST_ID) {
             return
         }
+        if (updated.id > 0 && updated.userId != activeLibraryUserId) {
+            return
+        }
         backendPlaylists = backendPlaylists.map { if (it.id == updated.id) updated else it }
         customPlaylists = customPlaylists.map { if (it.id == updated.id) updated else it }
         playlistOverrides[updated.id] = updated
@@ -1134,8 +1514,10 @@ class MusicViewModel(
     }
 
     private suspend fun syncPlaylistFromBackend(playlistId: Int) {
+        val requestLibraryUserId = activeLibraryUserId
         val result = withPlaylistAuth { playlistRepository.getPlaylistById(playlistId) }
         val synced = result.getOrNull() ?: return
+        if (activeLibraryUserId != requestLibraryUserId || synced.userId != requestLibraryUserId) return
         backendPlaylists = backendPlaylists.map { if (it.id == synced.id) synced else it }
         applyPlaylistUpdate(synced)
     }
@@ -1151,8 +1533,10 @@ class MusicViewModel(
         if (result.isFailure && result.exceptionOrNull().isUnauthorized()) {
             val refreshed = refreshAccessToken()
             if (refreshed.isFailure) {
-                clearStoredAuthSession()
                 val exception = refreshed.exceptionOrNull() ?: IllegalStateException("Session expired. Please log in again.")
+                if (exception.requiresAuthSessionReset()) {
+                    clearStoredAuthSession()
+                }
                 return Result.failure(exception)
             }
 
@@ -1167,7 +1551,7 @@ class MusicViewModel(
     private suspend fun ensurePlaylistAuth(): Result<Unit> {
         val hasExplicitAuth = playerPrefs.getBoolean(KEY_EXPLICIT_AUTH, false)
         if (!hasExplicitAuth) {
-            return Result.failure(IllegalStateException("Please log in to sync playlists."))
+            return Result.failure(IllegalStateException("Please log in to sync your library."))
         }
 
         val storedToken = playerPrefs.getString(KEY_API_ACCESS_TOKEN, null)
@@ -1181,8 +1565,10 @@ class MusicViewModel(
             return Result.success(Unit)
         }
 
-        clearStoredAuthSession()
         val exception = refreshed.exceptionOrNull() ?: IllegalStateException("Session expired. Please log in again.")
+        if (exception.requiresAuthSessionReset()) {
+            clearStoredAuthSession()
+        }
         return Result.failure(exception)
     }
 
@@ -1191,7 +1577,11 @@ class MusicViewModel(
             LoginRequest(email = email, password = password)
         )
         val authData = response.data ?: throw IllegalStateException(response.message ?: "Login failed")
-        saveAuthSession(authData.accessToken, authData.refreshToken)
+        saveAuthSession(
+            accessToken = authData.accessToken,
+            refreshToken = authData.refreshToken,
+            user = authData.user.toDomainUser()
+        )
     }
 
     private suspend fun registerWithEmail(credentials: GuestCredentials): Result<Unit> = runCatching {
@@ -1203,7 +1593,11 @@ class MusicViewModel(
             )
         )
         val authData = response.data ?: throw IllegalStateException(response.message ?: "Registration failed")
-        saveAuthSession(authData.accessToken, authData.refreshToken)
+        saveAuthSession(
+            accessToken = authData.accessToken,
+            refreshToken = authData.refreshToken,
+            user = authData.user.toDomainUser()
+        )
     }
 
     private fun loadOrCreateGuestCredentials(): GuestCredentials {
@@ -1213,7 +1607,7 @@ class MusicViewModel(
             return GuestCredentials(
                 email = storedEmail,
                 password = storedPassword,
-                displayName = "Cinder Guest"
+                displayName = "No profile"
             )
         }
 
@@ -1225,7 +1619,7 @@ class MusicViewModel(
         val credentials = GuestCredentials(
             email = "guest_${suffix}@cinderssoul.local",
             password = "guest_${suffix}_123456",
-            displayName = "Guest ${suffix.takeLast(4)}"
+            displayName = "No profile"
         )
 
         playerPrefs.edit()
@@ -1236,25 +1630,31 @@ class MusicViewModel(
         return credentials
     }
 
-    private fun saveAuthSession(accessToken: String, refreshToken: String, explicitUser: Boolean = false) {
+    private fun saveAuthSession(
+        accessToken: String,
+        refreshToken: String,
+        explicitUser: Boolean = false,
+        user: User? = null
+    ) {
         playerPrefs.edit()
             .putString(KEY_API_ACCESS_TOKEN, accessToken)
             .putString(KEY_API_REFRESH_TOKEN, refreshToken)
             .putBoolean(KEY_EXPLICIT_AUTH, explicitUser)
             .apply()
+        user?.let(::cacheAuthUser)
         ApiClient.setAccessToken(accessToken)
     }
 
     private suspend fun refreshAccessToken(): Result<Unit> = runCatching {
         val refreshToken = playerPrefs.getString(KEY_API_REFRESH_TOKEN, null)
         if (refreshToken.isNullOrBlank()) {
-            throw IllegalStateException("Session expired. Please log in again.")
+            throw SessionExpiredException("Session expired. Please log in again.")
         }
 
         val response = ApiClient.apiService.refreshToken(RefreshTokenRequest(refreshToken = refreshToken))
         val refreshedToken = response.requireData().accessToken
         if (refreshedToken.isBlank()) {
-            throw IllegalStateException("Session refresh returned an empty access token.")
+            throw SessionExpiredException("Session refresh returned an empty access token.")
         }
 
         playerPrefs.edit()
@@ -1268,12 +1668,18 @@ class MusicViewModel(
             .remove(KEY_API_ACCESS_TOKEN)
             .remove(KEY_API_REFRESH_TOKEN)
             .remove(KEY_EXPLICIT_AUTH)
+            .remove(KEY_AUTH_USER_ID)
+            .remove(KEY_AUTH_USER_EMAIL)
+            .remove(KEY_AUTH_USER_DISPLAY_NAME)
+            .remove(KEY_AUTH_USER_AVATAR_URL)
+            .remove(KEY_AUTH_USER_ROLE)
+            .remove(KEY_AUTH_USER_CREATED_AT)
             .apply()
         ApiClient.setAccessToken(null)
+        switchLibraryOwner(GUEST_LIBRARY_USER_ID)
         _uiState.value = _uiState.value.copy(
             authUser = null,
-            authMessage = null,
-            passwordResetDevOtp = null
+            authMessage = null
         )
     }
 
@@ -1319,33 +1725,34 @@ class MusicViewModel(
         val displayName: String
     )
 
+    private class SessionExpiredException(message: String) : IllegalStateException(message)
+
     private fun Throwable?.isUnauthorized(): Boolean {
-        return this is HttpException && code() == 401
+        return this is HttpException && (code() == 401 || code() == 403)
+    }
+
+    private fun Throwable?.requiresAuthSessionReset(): Boolean {
+        return this is SessionExpiredException || this.isUnauthorized()
     }
 
     private fun Throwable?.isConflict(): Boolean {
         return this is HttpException && code() == 409
     }
 
+    private fun Throwable?.isNotFound(): Boolean {
+        return this is HttpException && code() == 404
+    }
+
     private fun normalizeBackendUrl(url: String?): String? {
-        if (url.isNullOrBlank()) return null
-
-        val isEmulator = (android.os.Build.FINGERPRINT.startsWith("generic")
-                || android.os.Build.MODEL.contains("google_sdk")
-                || android.os.Build.MODEL.contains("Emulator"))
-
-        return if (isEmulator) {
-            url.replace("localhost", "10.0.2.2").replace("127.0.0.1", "10.0.2.2")
-        } else {
-            // Trên máy thật, nếu dùng adb reverse thì localhost là chuẩn nhất, không được đổi thành 10.0.2.2
-            url.replace("10.0.2.2", "localhost").replace("127.0.0.1", "localhost")
-        }
+        return ApiClient.normalizeBackendUrl(url)
     }
 
     override fun onCleared() {
         progressJob?.cancel()
         spinEffectJob?.cancel()
         persistCurrentSongState()
+        playbackNotificationManager.release()
+        mediaSession.release()
         exoPlayer.release()
         super.onCleared()
     }
@@ -1369,11 +1776,7 @@ class MusicViewModel(
         val playableUri = playableUriFor(song) ?: return
 
         try {
-            val mediaItem = MediaItem.Builder()
-                .setUri(playableUri)
-                .setMediaId(song.id.toString())
-                .setMimeType(mimeTypeFor(playableUri))
-                .build()
+            val mediaItem = buildMediaItem(song, playableUri)
 
             exoPlayer.setMediaItem(mediaItem)
             exoPlayer.prepare()
@@ -1400,8 +1803,108 @@ class MusicViewModel(
             .apply()
     }
 
-    private fun loadDownloadedSongIds(): Set<Int> {
-        val raw = playerPrefs.getString(KEY_DOWNLOADED_SONG_IDS, "").orEmpty()
+    private fun downloadedSongIdsKey(userId: Int): String {
+        return "$KEY_DOWNLOADED_SONG_IDS_PREFIX$userId"
+    }
+
+    private fun migratedRoomFavoritesKey(userId: Int): String {
+        return "$KEY_MIGRATED_ROOM_FAVORITES_PREFIX$userId"
+    }
+
+    private suspend fun legacyRoomFavoriteIdsForMigration(
+        userId: Int,
+        hasAccountLibrary: Boolean
+    ): List<Int> {
+        if (!hasAccountLibrary) return emptyList()
+        if (playerPrefs.getBoolean(migratedRoomFavoritesKey(userId), false)) return emptyList()
+
+        val dao = musicCacheDao ?: return emptyList()
+        val legacyIds = withContext(Dispatchers.IO) {
+            dao.getFavoriteSongIds(userId)
+        }
+
+        if (legacyIds.isEmpty()) {
+            playerPrefs.edit()
+                .putBoolean(migratedRoomFavoritesKey(userId), true)
+                .apply()
+        }
+
+        return legacyIds
+    }
+
+    private fun migrateLegacyRoomFavoritesToBackend(userId: Int, songIds: List<Int>) {
+        if (userId == GUEST_LIBRARY_USER_ID || songIds.isEmpty()) return
+        if (playerPrefs.getBoolean(migratedRoomFavoritesKey(userId), false)) return
+        if (!runningLegacyFavoriteMigrations.add(userId)) return
+
+        viewModelScope.launch {
+            try {
+                val uniqueSongIds = songIds.distinct()
+                val failed = uniqueSongIds.any { songId ->
+                    val result = withPlaylistAuth {
+                        libraryRepository.addSongToLibrary(songId).map { Unit }
+                    }
+                    result.isFailure
+                }
+
+                if (!failed) {
+                    playerPrefs.edit()
+                        .putBoolean(migratedRoomFavoritesKey(userId), true)
+                        .apply()
+                }
+            } finally {
+                runningLegacyFavoriteMigrations.remove(userId)
+            }
+        }
+    }
+
+    private fun restoreCachedAuthUserSession(): Boolean {
+        val hasExplicitAuth = playerPrefs.getBoolean(KEY_EXPLICIT_AUTH, false)
+        if (!hasExplicitAuth) return false
+
+        val cachedUser = loadCachedAuthUser() ?: return false
+        _uiState.value = _uiState.value.copy(authUser = cachedUser, authMessage = null)
+        if (activeLibraryUserId != cachedUser.id) {
+            switchLibraryOwner(cachedUser.id)
+        }
+        return true
+    }
+
+    private fun loadCachedAuthUser(): User? {
+        val userId = playerPrefs.getInt(KEY_AUTH_USER_ID, Int.MIN_VALUE)
+        if (userId == Int.MIN_VALUE) return null
+
+        val email = playerPrefs.getString(KEY_AUTH_USER_EMAIL, null)?.trim().orEmpty()
+        if (email.isBlank()) return null
+
+        val displayName = playerPrefs.getString(KEY_AUTH_USER_DISPLAY_NAME, null)
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?: email.substringBefore('@').ifBlank { "User" }
+
+        return User(
+            id = userId,
+            email = email,
+            displayName = displayName,
+            avatarUrl = playerPrefs.getString(KEY_AUTH_USER_AVATAR_URL, null),
+            role = playerPrefs.getString(KEY_AUTH_USER_ROLE, null)?.takeIf { it.isNotBlank() } ?: "user",
+            createdAt = playerPrefs.getString(KEY_AUTH_USER_CREATED_AT, null)
+        )
+    }
+
+    private fun cacheAuthUser(user: User) {
+        playerPrefs.edit()
+            .putInt(KEY_AUTH_USER_ID, user.id)
+            .putString(KEY_AUTH_USER_EMAIL, user.email)
+            .putString(KEY_AUTH_USER_DISPLAY_NAME, user.displayName)
+            .putString(KEY_AUTH_USER_AVATAR_URL, user.avatarUrl)
+            .putString(KEY_AUTH_USER_ROLE, user.role)
+            .putString(KEY_AUTH_USER_CREATED_AT, user.createdAt)
+            .apply()
+    }
+
+    private fun loadDownloadedSongIds(userId: Int): Set<Int> {
+        val raw = playerPrefs.getString(downloadedSongIdsKey(userId), "").orEmpty()
         if (raw.isBlank()) return emptySet()
         return raw.split(',')
             .mapNotNull { it.trim().toIntOrNull() }
@@ -1412,7 +1915,7 @@ class MusicViewModel(
         if (songId in downloadedSongIds) return
         downloadedSongIds = downloadedSongIds + songId
         playerPrefs.edit()
-            .putString(KEY_DOWNLOADED_SONG_IDS, downloadedSongIds.joinToString(","))
+            .putString(downloadedSongIdsKey(activeLibraryUserId), downloadedSongIds.joinToString(","))
             .apply()
         _uiState.value = _uiState.value.copy(downloadedSongIds = downloadedSongIds)
 
@@ -1420,6 +1923,7 @@ class MusicViewModel(
         viewModelScope.launch(Dispatchers.IO) {
             dao.upsertDownloadedSong(
                 DownloadedSongEntity(
+                    userId = activeLibraryUserId,
                     songId = songId,
                     localUri = localUri
                 )

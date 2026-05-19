@@ -20,7 +20,8 @@ const protect = async (req, res, next) => {
     // Add user info to request
     req.user = {
       id: decoded.id,
-      email: decoded.email
+      email: decoded.email,
+      role: decoded.role || 'user'
     };
 
     next();
@@ -47,7 +48,8 @@ const optionalAuth = async (req, res, next) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       req.user = {
         id: decoded.id,
-        email: decoded.email
+        email: decoded.email,
+        role: decoded.role || 'user'
       };
     }
 
@@ -58,4 +60,26 @@ const optionalAuth = async (req, res, next) => {
   }
 };
 
-module.exports = { protect, optionalAuth };
+const requireAdmin = async (req, res, next) => {
+  try {
+    if (!req.user?.id) {
+      return next(new AppError('You are not logged in. Please log in to access this resource.', 401));
+    }
+
+    const { User } = require('../models');
+    const user = await User.findByPk(req.user.id, {
+      attributes: ['id', 'email', 'role']
+    });
+
+    if (!user || user.role !== 'admin') {
+      return next(new AppError('Admin access required', 403));
+    }
+
+    req.user.role = user.role;
+    next();
+  } catch (error) {
+    next(error);
+  }
+};
+
+module.exports = { protect, optionalAuth, requireAdmin };

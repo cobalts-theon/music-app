@@ -49,6 +49,52 @@ data class UpdateUserRequest(
     val newPassword: String? = null
 )
 
+data class CreateArtistRequest(
+    val name: String,
+    val bio: String? = null,
+    val avatarUrl: String? = null
+)
+
+data class UpdateArtistRequest(
+    val name: String? = null,
+    val bio: String? = null,
+    val avatarUrl: String? = null
+)
+
+data class CreateAlbumRequest(
+    val title: String,
+    val artistId: Int,
+    val coverUrl: String? = null,
+    val releaseDate: String? = null
+)
+
+data class UpdateAlbumRequest(
+    val title: String? = null,
+    val coverUrl: String? = null,
+    val releaseDate: String? = null
+)
+
+data class CreateSongRequest(
+    val title: String,
+    val artistId: Int,
+    val albumId: Int? = null,
+    val audioUrl: String,
+    val duration: Int,
+    val coverUrl: String? = null,
+    val genre: String? = null,
+    val lyrics: String? = null
+)
+
+data class UpdateSongRequest(
+    val title: String? = null,
+    val albumId: Int? = null,
+    val audioUrl: String? = null,
+    val duration: Int? = null,
+    val coverUrl: String? = null,
+    val genre: String? = null,
+    val lyrics: String? = null
+)
+
 data class CreatePlaylistRequest(
     val name: String,
     val description: String? = null,
@@ -86,12 +132,35 @@ data class AuthProfileDataDto(
 
 data class PasswordResetOtpDataDto(
     val email: String,
-    val otpExpiresInSeconds: Int,
-    val devOtp: String? = null
+    val otpExpiresInSeconds: Int
 )
 
 data class RefreshTokenDataDto(
     val accessToken: String
+)
+
+data class AdminSummaryDto(
+    val usersCount: Int = 0,
+    val songsCount: Int = 0,
+    val artistsCount: Int = 0,
+    val albumsCount: Int = 0,
+    val playlistsCount: Int = 0
+)
+
+data class AdminCreateUserRequest(
+    val email: String,
+    val password: String,
+    val displayName: String,
+    val avatarUrl: String? = null,
+    val role: String = "user"
+)
+
+data class AdminUpdateUserRequest(
+    val email: String? = null,
+    val password: String? = null,
+    val displayName: String? = null,
+    val avatarUrl: String? = null,
+    val role: String? = null
 )
 
 data class UserDto(
@@ -99,6 +168,7 @@ data class UserDto(
     val email: String,
     val displayName: String? = null,
     val avatarUrl: String? = null,
+    val role: String? = null,
     @SerializedName("display_name") val displayNameSnake: String? = null,
     @SerializedName("avatar_url") val avatarUrlSnake: String? = null,
     @SerializedName("created_at") val createdAt: String? = null,
@@ -151,6 +221,7 @@ fun UserDto.toDomainUser(): User = User(
     email = email,
     displayName = displayName ?: displayNameSnake.orEmpty(),
     avatarUrl = normalizeBackendUrl(avatarUrl ?: avatarUrlSnake),
+    role = role ?: "user",
     createdAt = createdAt ?: createdAtCamel
 )
 
@@ -196,8 +267,5 @@ fun PlaylistDto.toDomainPlaylist(): Playlist = Playlist(
 )
 
 private fun normalizeBackendUrl(url: String?): String? {
-    if (url.isNullOrBlank()) return null
-    return url
-        .replace("http://localhost:", "http://10.0.2.2:")
-        .replace("http://127.0.0.1:", "http://10.0.2.2:")
+    return ApiClient.normalizeBackendUrl(url)
 }

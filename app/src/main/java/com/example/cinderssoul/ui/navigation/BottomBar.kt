@@ -92,8 +92,9 @@ internal fun AppBottomBar(
                 Brush.verticalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        Color.Black.copy(alpha = 0.5f),
-                        Color.Black.copy(alpha = 1f)
+                        Color.Black.copy(alpha = 0.16F),
+                        Color.Black.copy(alpha = 0.5F),
+                        Color.Black.copy(alpha = 1F)
                     )
                 )
             )
