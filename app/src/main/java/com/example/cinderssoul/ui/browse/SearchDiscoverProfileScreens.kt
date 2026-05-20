@@ -1,6 +1,7 @@
 package com.example.cinderssoul.ui.browse
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.gestures.snapping.SnapPosition
 import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
@@ -25,9 +26,12 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Album
 import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.Close
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
+import androidx.compose.material.icons.rounded.SettingsSuggest
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -65,6 +69,7 @@ import com.example.cinderssoul.models.User
 import com.example.cinderssoul.ui.app.AppleMusicRed
 import com.example.cinderssoul.ui.app.HomeCollapsedItemLimit
 import com.example.cinderssoul.ui.app.LocalBottomBarContentPadding
+import com.example.cinderssoul.ui.app.ThemeMode
 
 private val SearchTextFieldShape = RoundedCornerShape(28.dp)
 
@@ -376,7 +381,7 @@ internal fun DiscoverTab(
         modifier = modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .background(Color.Black)
+            .background(MaterialTheme.colorScheme.background)
             .padding(top = 2.dp),
         state = listState,
         contentPadding = PaddingValues(bottom = bottomContentPadding),
@@ -474,6 +479,8 @@ internal fun ProfileTab(
     user: User?,
     isLoading: Boolean,
     message: String?,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit,
     onLogin: () -> Unit,
     onEditProfile: () -> Unit,
     onOpenAdmin: () -> Unit,
@@ -505,7 +512,7 @@ internal fun ProfileTab(
         modifier = modifier
             .fillMaxSize()
             .statusBarsPadding()
-            .background(Color.Black)
+            .background(MaterialTheme.colorScheme.background)
             .padding(horizontal = 20.dp, vertical = 2.dp),
         state = listState,
         contentPadding = PaddingValues(bottom = bottomContentPadding),
@@ -569,6 +576,14 @@ internal fun ProfileTab(
 
         if (user == null) {
             item {
+                Column {
+                    ProfileThemeRows(
+                        themeMode = themeMode,
+                        onThemeModeChange = onThemeModeChange
+                    )
+                }
+            }
+            item {
                 TextButton(onClick = onLogin) {
                     Text("Sign in")
                 }
@@ -590,6 +605,10 @@ internal fun ProfileTab(
                             onClick = onOpenAdmin
                         )
                     }
+                    ProfileThemeRows(
+                        themeMode = themeMode,
+                        onThemeModeChange = onThemeModeChange
+                    )
                     LibraryEntryRow(
                         title = "Share profile",
                         sub = user.displayName,
@@ -605,5 +624,43 @@ internal fun ProfileTab(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun ProfileThemeRows(
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit
+) {
+    val systemDarkTheme = isSystemInDarkTheme()
+    val manualThemeMode = when (themeMode) {
+        ThemeMode.Dark -> ThemeMode.Dark
+        ThemeMode.Light -> ThemeMode.Light
+        ThemeMode.System -> if (systemDarkTheme) ThemeMode.Dark else ThemeMode.Light
+    }
+    val isManualMode = themeMode != ThemeMode.System
+
+    LibraryEntryRow(
+        title = "Theme mode",
+        sub = if (isManualMode) "Manual" else "System",
+        icon = Icons.Rounded.SettingsSuggest,
+        onClick = {
+            if (isManualMode) {
+                onThemeModeChange(ThemeMode.System)
+            } else {
+                onThemeModeChange(manualThemeMode)
+            }
+        }
+    )
+    if (isManualMode) {
+        val isDark = themeMode == ThemeMode.Dark
+        LibraryEntryRow(
+            title = "Appearance",
+            sub = if (isDark) "Dark" else "Light",
+            icon = if (isDark) Icons.Rounded.DarkMode else Icons.Rounded.LightMode,
+            onClick = {
+                onThemeModeChange(if (isDark) ThemeMode.Light else ThemeMode.Dark)
+            }
+        )
     }
 }

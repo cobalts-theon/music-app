@@ -85,6 +85,10 @@ internal fun AppBottomBar(
     onTabSelected: (MusicTab) -> Unit,
     onExpand: () -> Unit
 ) {
+    val bottomScrim = MaterialTheme.colorScheme.background
+    val barBackground = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f)
+    val borderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.30f)
+
     Column(
         modifier = modifier
             .fillMaxWidth()
@@ -92,9 +96,9 @@ internal fun AppBottomBar(
                 Brush.verticalGradient(
                     colors = listOf(
                         Color.Transparent,
-                        Color.Black.copy(alpha = 0.16F),
-                        Color.Black.copy(alpha = 0.5F),
-                        Color.Black.copy(alpha = 1F)
+                        bottomScrim.copy(alpha = 0.16f),
+                        bottomScrim.copy(alpha = 0.50f),
+                        bottomScrim
                     )
                 )
             )
@@ -152,8 +156,8 @@ internal fun AppBottomBar(
                 modifier = Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(50.dp))
-                    .background(Color(0xE61B1C20))
-                    .border(1.dp, Color.White.copy(alpha = 0.18f), RoundedCornerShape(50.dp))
+                    .background(barBackground)
+                    .border(1.dp, borderColor, RoundedCornerShape(50.dp))
                     .padding(horizontal = 8.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -181,12 +185,12 @@ internal fun BottomTabButton(
     val itemBackground = if (selected) {
         AppleMusicRed.copy(alpha = 0.18f)
     } else {
-        Color.White.copy(alpha = 0.05f)
+        MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.32f)
     }
     val itemBorder = if (selected) {
         AppleMusicRed.copy(alpha = 0.55f)
     } else {
-        Color.White.copy(alpha = 0.10f)
+        MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
     }
 
     Column(
@@ -253,7 +257,7 @@ internal fun CompactCurrentSongBar(
             modifier = Modifier
                 .weight(1f)
                 .clip(RoundedCornerShape(50.dp))
-                .background(Color(0xEE202126))
+                .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
                 .border(1.dp, AppleMusicRed.copy(alpha = 0.42f), RoundedCornerShape(50.dp))
                 .clickable(onClick = onOpen)
                 .padding(start = 10.dp),
@@ -293,8 +297,8 @@ internal fun CompactCurrentSongBar(
             modifier = Modifier
                 .size(44.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.3f))
-                .border(1.dp, Color.White.copy(alpha = 0.42f), CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.56f))
+                .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.42f), CircleShape)
                 .clickable(onClick = onSearch),
             contentAlignment = Alignment.Center
         ) {

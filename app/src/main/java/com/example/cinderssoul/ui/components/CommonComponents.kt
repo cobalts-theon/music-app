@@ -540,8 +540,8 @@ internal fun MiniPlayer(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(50.dp))
-            .background(Color(0xEE202126))
-            .border(1.dp, Color.White.copy(alpha = 0.14f), RoundedCornerShape(50.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.96f))
+            .border(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.22f), RoundedCornerShape(50.dp))
             .clickable(onClick = onOpen)
             .padding(horizontal = 10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -734,7 +734,7 @@ internal fun RowScope.RecentAddedGridTile(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(1f)
-                .background(Color.White.copy(alpha = 0.08f), MaterialTheme.shapes.medium)
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.22f), MaterialTheme.shapes.medium)
                 .padding(3.dp)
         ) {
             when (item) {
@@ -906,7 +906,7 @@ internal fun LibraryIconTile(
         modifier = modifier
             .clip(MaterialTheme.shapes.small)
             .border(WhiteCardBorder, MaterialTheme.shapes.small)
-            .background(Color.White.copy(alpha = 0.08f)),
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.28f)),
         contentAlignment = Alignment.Center
     ) {
         Icon(
@@ -946,7 +946,7 @@ internal fun LibraryRowDivider(modifier: Modifier = Modifier) {
         modifier = modifier
             .fillMaxWidth()
             .height(1.dp)
-            .background(Color.White.copy(alpha = 0.10f))
+            .background(MaterialTheme.colorScheme.outline.copy(alpha = 0.16f))
     )
 }
 
@@ -959,7 +959,7 @@ internal fun LibraryEntryRow(
     onClick: (() -> Unit)? = null
 ) {
     val iconColor = AppleMusicRed
-    val accentColor = Color.White
+    val accentColor = MaterialTheme.colorScheme.onSurface
     val subColor = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.74f)
 
     val rowModifier = if (onClick != null) {

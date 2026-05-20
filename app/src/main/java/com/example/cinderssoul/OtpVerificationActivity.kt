@@ -99,7 +99,7 @@ class OtpVerificationActivity : ComponentActivity() {
         }
 
         setContent {
-            CindersSoulTheme(darkTheme = true) {
+            CindersSoulTheme {
                 Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
                     OtpVerificationScreen(
                         email = email,

@@ -158,7 +158,7 @@ internal fun LibraryTab(
         modifier = modifier
             .then(if (activeSection == LibrarySection.Overview) Modifier.statusBarsPadding() else Modifier)
             .fillMaxSize()
-            .background(Color.Black)
+            .background(MaterialTheme.colorScheme.background)
             .padding(
                 horizontal = 20.dp,
                 vertical = if (activeSection == LibrarySection.Overview) 2.dp else 10.dp
@@ -427,7 +427,7 @@ internal fun PlaylistDetailScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(MaterialTheme.colorScheme.background),
         state = listState,
         contentPadding = PaddingValues(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -670,7 +670,7 @@ internal fun SongCollectionDetailScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(MaterialTheme.colorScheme.background),
         state = listState,
         contentPadding = PaddingValues(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(6.dp)
@@ -737,7 +737,7 @@ internal fun LibraryDetailHeader(
                 Brush.verticalGradient(
                     colors = listOf(
                         AppleMusicRed.copy(alpha = 0.30f),
-                        Color.Black
+                        MaterialTheme.colorScheme.background
                     )
                 )
             )
@@ -788,7 +788,7 @@ internal fun LibraryFilledAction(
     enabled: Boolean,
     onClick: () -> Unit
 ) {
-    val backgroundColor = if (enabled) AppleMusicRed else Color.White.copy(alpha = 0.12f)
+    val backgroundColor = if (enabled) AppleMusicRed else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f)
     val foregroundColor = if (enabled) Color.White else MaterialTheme.colorScheme.onSurfaceVariant
 
     Row(
@@ -827,7 +827,7 @@ internal fun LibraryCircularAction(
         onClick = onClick,
         modifier = Modifier
             .size(44.dp)
-            .background(Color.White.copy(alpha = 0.12f), CircleShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.42f), CircleShape)
     ) {
         Icon(
             imageVector = icon,

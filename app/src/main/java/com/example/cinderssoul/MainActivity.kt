@@ -6,9 +6,14 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -17,12 +22,14 @@ import com.example.cinderssoul.local.CinderDatabase
 import com.example.cinderssoul.repository.SongRepository
 import com.example.cinderssoul.admin.AdminActivity
 import com.example.cinderssoul.ui.app.MusicApp
+import com.example.cinderssoul.ui.app.ThemeMode
 import com.example.cinderssoul.ui.theme.CindersSoulTheme
 
 class MainActivity : ComponentActivity() {
     private companion object {
         private const val PLAYER_PREFS = "player_state"
         private const val KEY_AUTH_USER_ROLE = "auth_user_role"
+        private const val KEY_THEME_MODE = "theme_mode"
     }
 
     private val database by lazy { CinderDatabase.getInstance(applicationContext) }
@@ -39,7 +46,15 @@ class MainActivity : ComponentActivity() {
         }
 
         setContent {
-            CindersSoulTheme(darkTheme = true) {
+            val systemDarkTheme = isSystemInDarkTheme()
+            var themeMode by rememberSaveable { mutableStateOf(loadThemeMode()) }
+            val darkTheme = when (themeMode) {
+                ThemeMode.System -> systemDarkTheme
+                ThemeMode.Light -> false
+                ThemeMode.Dark -> true
+            }
+
+            CindersSoulTheme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
@@ -54,7 +69,14 @@ class MainActivity : ComponentActivity() {
                             ) as T
                         }
                     }
-                    MusicApp(viewModel = viewModel(factory = factory))
+                    MusicApp(
+                        viewModel = viewModel(factory = factory),
+                        themeMode = themeMode,
+                        onThemeModeChange = { mode ->
+                            themeMode = mode
+                            saveThemeMode(mode)
+                        }
+                    )
                 }
             }
         }
@@ -63,5 +85,17 @@ class MainActivity : ComponentActivity() {
     private fun hasAdminSession(): Boolean {
         val prefs = getSharedPreferences(PLAYER_PREFS, Context.MODE_PRIVATE)
         return prefs.getString(KEY_AUTH_USER_ROLE, null).equals("admin", ignoreCase = true)
+    }
+
+    private fun loadThemeMode(): ThemeMode {
+        val prefs = getSharedPreferences(PLAYER_PREFS, Context.MODE_PRIVATE)
+        return ThemeMode.fromStorageValue(prefs.getString(KEY_THEME_MODE, null))
+    }
+
+    private fun saveThemeMode(mode: ThemeMode) {
+        getSharedPreferences(PLAYER_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_THEME_MODE, mode.storageValue)
+            .apply()
     }
 }

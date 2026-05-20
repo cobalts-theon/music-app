@@ -40,7 +40,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -76,7 +75,11 @@ internal val LocalBottomBarContentPadding = staticCompositionLocalOf { 0.dp }
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-internal fun MusicApp(viewModel: MusicViewModel) {
+internal fun MusicApp(
+    viewModel: MusicViewModel,
+    themeMode: ThemeMode,
+    onThemeModeChange: (ThemeMode) -> Unit
+) {
     val context = LocalContext.current
     val density = LocalDensity.current
     val coroutineScope = rememberCoroutineScope()
@@ -126,8 +129,8 @@ internal fun MusicApp(viewModel: MusicViewModel) {
         with(density) { bottomBarHeightPx.toDp() }
     }
     val libraryTopBarColors = TopAppBarDefaults.topAppBarColors(
-        containerColor = Color.Black,
-        scrolledContainerColor = Color.Black,
+        containerColor = MaterialTheme.colorScheme.background,
+        scrolledContainerColor = MaterialTheme.colorScheme.background,
         navigationIconContentColor = AppleMusicRed,
         titleContentColor = MaterialTheme.colorScheme.onSurface,
         actionIconContentColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -645,6 +648,8 @@ internal fun MusicApp(viewModel: MusicViewModel) {
                     user = uiState.authUser,
                     isLoading = uiState.isAuthLoading,
                     message = uiState.authMessage,
+                    themeMode = themeMode,
+                    onThemeModeChange = onThemeModeChange,
                     onLogin = openAuthenticationActivity,
                     onEditProfile = { showAccountDialog = true },
                     onOpenAdmin = openAdminActivity,

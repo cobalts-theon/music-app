@@ -49,6 +49,18 @@ internal enum class AuthDialogMode {
     SignIn, Register, ForgotPassword, Profile
 }
 
+internal enum class ThemeMode(val storageValue: String) {
+    System("system"),
+    Light("light"),
+    Dark("dark");
+
+    companion object {
+        fun fromStorageValue(value: String?): ThemeMode {
+            return entries.firstOrNull { it.storageValue == value } ?: System
+        }
+    }
+}
+
 internal val AppleMusicRed = Color(0xFFFF2D55)
 internal const val HomeCollapsedItemLimit = 10
 internal const val HomeSongGridRows = 4

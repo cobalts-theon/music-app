@@ -304,7 +304,7 @@ internal fun HomeCollectionDetailScreen(
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
-            .background(Color.Black),
+            .background(MaterialTheme.colorScheme.background),
         state = listState,
         contentPadding = PaddingValues(bottom = bottomContentPadding),
         verticalArrangement = Arrangement.spacedBy(6.dp)

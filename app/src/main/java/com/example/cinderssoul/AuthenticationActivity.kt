@@ -124,7 +124,7 @@ class AuthenticationActivity : ComponentActivity() {
         }
 
         setContent {
-            CindersSoulTheme(darkTheme = true) {
+            CindersSoulTheme {
                 Surface(color = MaterialTheme.colorScheme.background, modifier = Modifier.fillMaxSize()) {
                     AuthenticationScreen(
                         onClose = { finish() },
