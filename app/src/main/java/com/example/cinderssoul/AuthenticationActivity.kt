@@ -221,7 +221,7 @@ private fun AuthenticationScreen(
         modifier = Modifier
             .fillMaxSize()
             .paint(
-                painterResource(id = R.drawable.authentication_background2),
+                painterResource(id = R.drawable.authentication_background3),
                 contentScale = ContentScale.FillBounds
             )
     ) {

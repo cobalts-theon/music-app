@@ -5,6 +5,7 @@ import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.os.Build
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
@@ -25,6 +26,9 @@ class PlaybackNotificationManager(
     }
 
     private val notificationManager: PlayerNotificationManager
+    private val appLogoBitmap: Bitmap? by lazy {
+        BitmapFactory.decodeResource(context.resources, R.drawable.cinders_souls_logo)
+    }
 
     init {
         ensureNotificationChannel()
@@ -45,7 +49,7 @@ class PlaybackNotificationManager(
                 player: Player,
                 callback: PlayerNotificationManager.BitmapCallback
             ): Bitmap? {
-                return null
+                return appLogoBitmap
             }
         }
 
@@ -55,7 +59,7 @@ class PlaybackNotificationManager(
             CHANNEL_ID
         )
             .setMediaDescriptionAdapter(descriptionAdapter)
-            .setSmallIconResourceId(R.mipmap.cinder_ic_launcher)
+            .setSmallIconResourceId(R.drawable.ic_cinder_notification)
             .build()
             .apply {
                 setMediaSessionToken(mediaSession.platformToken)

@@ -9,6 +9,7 @@ import androidx.activity.viewModels
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,21 +35,27 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Dashboard
+import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.Groups
 import androidx.compose.material.icons.rounded.LibraryMusic
+import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.MusicNote
 import androidx.compose.material.icons.rounded.Refresh
 import androidx.compose.material.icons.rounded.Save
 import androidx.compose.material.icons.rounded.Search
+import androidx.compose.material.icons.rounded.SettingsSuggest
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
@@ -66,6 +73,10 @@ import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -84,6 +95,7 @@ import com.example.cinderssoul.models.Song
 import com.example.cinderssoul.models.User
 import com.example.cinderssoul.network.ApiClient
 import com.example.cinderssoul.ui.app.AppleMusicRed
+import com.example.cinderssoul.ui.app.ThemeMode
 import com.example.cinderssoul.ui.components.CoverImage
 import com.example.cinderssoul.ui.components.LibraryRowDivider
 import com.example.cinderssoul.ui.components.itemCountText
@@ -102,6 +114,7 @@ private const val KEY_AUTH_USER_DISPLAY_NAME = "auth_user_display_name"
 private const val KEY_AUTH_USER_AVATAR_URL = "auth_user_avatar_url"
 private const val KEY_AUTH_USER_ROLE = "auth_user_role"
 private const val KEY_AUTH_USER_CREATED_AT = "auth_user_created_at"
+private const val KEY_THEME_MODE = "theme_mode"
 
 class AdminActivity : ComponentActivity() {
     private val viewModel: AdminViewModel by viewModels()
@@ -109,12 +122,29 @@ class AdminActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContent {
-            CindersSoulTheme {
+            val systemDarkTheme = isSystemInDarkTheme()
+            var themeMode by rememberSaveable { mutableStateOf(loadThemeMode()) }
+            val darkTheme = when (themeMode) {
+                ThemeMode.System -> systemDarkTheme
+                ThemeMode.Light -> false
+                ThemeMode.Dark -> true
+            }
+
+            CindersSoulTheme(darkTheme = darkTheme) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    AdminApp(viewModel = viewModel, onLogout = ::logout)
+                    AdminApp(
+                        viewModel = viewModel,
+                        themeMode = themeMode,
+                        isDarkTheme = darkTheme,
+                        onThemeModeChange = { mode ->
+                            themeMode = mode
+                            saveThemeMode(mode)
+                        },
+                        onLogout = ::logout
+                    )
                 }
             }
         }
@@ -141,11 +171,29 @@ class AdminActivity : ComponentActivity() {
         )
         finish()
     }
+
+    private fun loadThemeMode(): ThemeMode {
+        val prefs = getSharedPreferences(PLAYER_PREFS, Context.MODE_PRIVATE)
+        return ThemeMode.fromStorageValue(prefs.getString(KEY_THEME_MODE, null))
+    }
+
+    private fun saveThemeMode(mode: ThemeMode) {
+        getSharedPreferences(PLAYER_PREFS, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_THEME_MODE, mode.storageValue)
+            .apply()
+    }
 }
 
 @Composable
 @OptIn(ExperimentalMaterial3Api::class)
-private fun AdminApp(viewModel: AdminViewModel, onLogout: () -> Unit) {
+private fun AdminApp(
+    viewModel: AdminViewModel,
+    themeMode: ThemeMode,
+    isDarkTheme: Boolean,
+    onThemeModeChange: (ThemeMode) -> Unit,
+    onLogout: () -> Unit
+) {
     val state by viewModel.uiState.collectAsState()
     val searchQuery = state.searchQuery.trim()
     val filteredSongs = state.songs.filter { it.matchesAdminSearch(searchQuery) }
@@ -165,6 +213,11 @@ private fun AdminApp(viewModel: AdminViewModel, onLogout: () -> Unit) {
                     }
                 },
                 actions = {
+                    AdminThemeModeAction(
+                        themeMode = themeMode,
+                        isDarkTheme = isDarkTheme,
+                        onThemeModeChange = onThemeModeChange
+                    )
                     IconButton(onClick = viewModel::refresh) {
                         Icon(Icons.Rounded.Refresh, contentDescription = "Refresh")
                     }
@@ -380,6 +433,93 @@ private fun AdminApp(viewModel: AdminViewModel, onLogout: () -> Unit) {
             onSave = viewModel::saveUser
         )
     }
+}
+
+@Composable
+private fun AdminThemeModeAction(
+    themeMode: ThemeMode,
+    isDarkTheme: Boolean,
+    onThemeModeChange: (ThemeMode) -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val currentModeText = when (themeMode) {
+        ThemeMode.System -> "System (${if (isDarkTheme) "Dark" else "Light"})"
+        ThemeMode.Light -> "Light"
+        ThemeMode.Dark -> "Dark"
+    }
+    val actionIcon = when (themeMode) {
+        ThemeMode.System -> Icons.Rounded.SettingsSuggest
+        ThemeMode.Light -> Icons.Rounded.LightMode
+        ThemeMode.Dark -> Icons.Rounded.DarkMode
+    }
+
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                imageVector = actionIcon,
+                contentDescription = "Theme mode: $currentModeText"
+            )
+        }
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            AdminThemeModeMenuItem(
+                label = "System",
+                icon = Icons.Rounded.SettingsSuggest,
+                selected = themeMode == ThemeMode.System,
+                onClick = {
+                    expanded = false
+                    onThemeModeChange(ThemeMode.System)
+                }
+            )
+            AdminThemeModeMenuItem(
+                label = "Light",
+                icon = Icons.Rounded.LightMode,
+                selected = themeMode == ThemeMode.Light,
+                onClick = {
+                    expanded = false
+                    onThemeModeChange(ThemeMode.Light)
+                }
+            )
+            AdminThemeModeMenuItem(
+                label = "Dark",
+                icon = Icons.Rounded.DarkMode,
+                selected = themeMode == ThemeMode.Dark,
+                onClick = {
+                    expanded = false
+                    onThemeModeChange(ThemeMode.Dark)
+                }
+            )
+        }
+    }
+}
+
+@Composable
+private fun AdminThemeModeMenuItem(
+    label: String,
+    icon: ImageVector,
+    selected: Boolean,
+    onClick: () -> Unit
+) {
+    DropdownMenuItem(
+        text = { Text(label) },
+        onClick = onClick,
+        leadingIcon = {
+            Icon(icon, contentDescription = null)
+        },
+        trailingIcon = if (selected) {
+            {
+                Icon(
+                    imageVector = Icons.Rounded.Check,
+                    contentDescription = null,
+                    tint = AppleMusicRed
+                )
+            }
+        } else {
+            null
+        }
+    )
 }
 
 @Composable

@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.dp
 import coil3.compose.AsyncImage
@@ -32,7 +33,31 @@ import kotlinx.coroutines.isActive
 
 @Composable
 internal fun ArtworkBackground(imageUrl: String?, title: String) {
+    val colorScheme = MaterialTheme.colorScheme
+    val isLightTheme = colorScheme.background.luminance() > 0.5f
+    val imageAlpha = if (isLightTheme) 0.46f else 0.58f
+    val scrimColors = if (isLightTheme) {
+        listOf(
+            colorScheme.background.copy(alpha = 0.74f),
+            colorScheme.surface.copy(alpha = 0.62f),
+            Color.Black.copy(alpha = 0.16f),
+            colorScheme.background.copy(alpha = 0.80f)
+        )
+    } else {
+        listOf(
+            colorScheme.background.copy(alpha = 0.86f),
+            colorScheme.background.copy(alpha = 0.74f),
+            colorScheme.surface.copy(alpha = 0.78f),
+            colorScheme.background.copy(alpha = 0.90f)
+        )
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(colorScheme.background)
+        )
         if (!imageUrl.isNullOrBlank()) {
             AsyncImage(
                 model = imageUrl,
@@ -41,7 +66,7 @@ internal fun ArtworkBackground(imageUrl: String?, title: String) {
                 modifier = Modifier
                     .fillMaxSize()
                     .blur(16.dp)
-                    .graphicsLayer(alpha = 0.64f)
+                    .graphicsLayer(alpha = imageAlpha)
             )
         }
         Box(
@@ -49,12 +74,7 @@ internal fun ArtworkBackground(imageUrl: String?, title: String) {
                 .fillMaxSize()
                 .background(
                     Brush.verticalGradient(
-                        listOf(
-                            Color(0x7005090E),
-                            Color(0x66080E16),
-                            Color(0x560D1420),
-                            Color(0x4A111B29)
-                        )
+                        scrimColors
                     )
                 )
         )
@@ -68,6 +88,28 @@ internal fun RotatingArtwork(
     isPlaying: Boolean,
     speedMultiplier: Float
 ) {
+    val colorScheme = MaterialTheme.colorScheme
+    val isLightTheme = colorScheme.background.luminance() > 0.5f
+    val recordBorderColor = if (isLightTheme) {
+        Color.Black.copy(alpha = 0.32f)
+    } else {
+        colorScheme.outline.copy(alpha = 0.36f)
+    }
+    val recordBrush = Brush.radialGradient(
+        if (isLightTheme) {
+            listOf(
+                Color(0xFF30343A),
+                Color(0xFF171B22),
+                Color(0xFF07090D)
+            )
+        } else {
+            listOf(
+                colorScheme.surfaceVariant.copy(alpha = 0.92f),
+                colorScheme.surface.copy(alpha = 0.96f),
+                colorScheme.background
+            )
+        }
+    )
     val rotation = remember { Animatable(0f) }
 
     LaunchedEffect(isPlaying, speedMultiplier) {
@@ -93,16 +135,8 @@ internal fun RotatingArtwork(
                 .size(332.dp)
                 .graphicsLayer(rotationZ = rotation.value)
                 .clip(CircleShape)
-                .background(
-                    Brush.radialGradient(
-                        listOf(
-                            Color(0xFF111111),
-                            Color(0xFF040404),
-                            Color(0xFF000000)
-                        )
-                    )
-                )
-                .border(1.dp, Color(0xFF222222), CircleShape),
+                .background(recordBrush)
+                .border(1.dp, recordBorderColor, CircleShape),
             contentAlignment = Alignment.Center
         ) {
             if (imageUrl.isNullOrBlank()) {
@@ -116,6 +150,7 @@ internal fun RotatingArtwork(
                     Icon(
                         imageVector = Icons.Rounded.Album,
                         contentDescription = title,
+                        tint = colorScheme.onSurfaceVariant,
                         modifier = Modifier.size(72.dp)
                     )
                 }
@@ -134,8 +169,8 @@ internal fun RotatingArtwork(
                 modifier = Modifier
                     .size(26.dp)
                     .clip(CircleShape)
-                    .background(Color(0xFF070707))
-                    .border(1.dp, Color(0xFF262626), CircleShape)
+                    .background(if (isLightTheme) Color(0xFF090B0F) else colorScheme.background)
+                    .border(1.dp, recordBorderColor, CircleShape)
             )
         }
     }
