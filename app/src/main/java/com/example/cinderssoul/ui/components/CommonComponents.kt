@@ -393,6 +393,8 @@ private fun genreCardAssetModel(title: String): String {
         normalized.contains("pop") ||
             normalized.contains("v-pop") ||
             normalized.contains("vpop") -> "pop.jpg"
+        normalized.contains("ost") -> "OST.jpg"
+
         else -> "default.png"
     }
 

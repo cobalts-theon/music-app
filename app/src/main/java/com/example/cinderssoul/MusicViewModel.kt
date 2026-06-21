@@ -41,7 +41,6 @@ import com.example.cinderssoul.models.Playlist
 import com.example.cinderssoul.models.Song
 import com.example.cinderssoul.models.User
 import com.example.cinderssoul.network.ApiClient
-import com.example.cinderssoul.network.ApiEnvelope
 import com.example.cinderssoul.network.ForgotPasswordRequest
 import com.example.cinderssoul.network.GoogleAuthRequest
 import com.example.cinderssoul.network.LoginRequest
@@ -69,7 +68,9 @@ import retrofit2.HttpException
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.random.Random
+import androidx.media3.common.util.UnstableApi
 
+@UnstableApi
 class MusicViewModel(
     application: Application,
     private val songRepository: SongRepository,
@@ -108,6 +109,7 @@ class MusicViewModel(
         private const val PROGRESS_UPDATE_IDLE_MS = 2_500L
     }
 
+    @UnstableApi
     private object AudioCacheHolder {
         private val cacheRef = AtomicReference<SimpleCache?>()
 

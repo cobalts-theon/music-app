@@ -1,8 +1,9 @@
-package com.example.cinderssoul
+package com.example.cinderssoul.ui.library
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -30,6 +31,7 @@ import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Delete
 import androidx.compose.material.icons.rounded.DownloadDone
 import androidx.compose.material.icons.rounded.Edit
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Search
 import androidx.compose.material.icons.rounded.Share
@@ -459,32 +461,68 @@ internal fun PlaylistDetailScreen(
                     contentDescription = "Add songs",
                     onClick = { onAddSongs(playlist) }
                 )
-                if (playlist.id > 0) {
+                var showPlaylistActions by rememberSaveable(playlist.id) { mutableStateOf(false) }
+                Box {
                     LibraryCircularAction(
-                        icon = Icons.Rounded.Edit,
-                        contentDescription = "Edit playlist",
-                        onClick = { onEditPlaylist(playlist) }
+                        icon = Icons.Rounded.MoreVert,
+                        contentDescription = "More playlist actions",
+                        onClick = { showPlaylistActions = true }
                     )
-                }
-                if (playlist.id > 0 && playlist.isPublic) {
-                    LibraryCircularAction(
-                        icon = Icons.Rounded.Share,
-                        contentDescription = "Share playlist",
-                        onClick = { onSharePlaylist(playlist) }
-                    )
-                }
-                LibraryCircularAction(
-                    icon = Icons.Rounded.DownloadDone,
-                    contentDescription = "Download playlist",
-                    onClick = { onDownloadPlaylist(playlist) }
-                )
-                if (playlist.id > 0) {
-                    LibraryCircularAction(
-                        icon = Icons.Rounded.Delete,
-                        contentDescription = "Delete playlist",
-                        isDestructive = true,
-                        onClick = { onDeletePlaylist(playlist) }
-                    )
+                    DropdownMenu(
+                        expanded = showPlaylistActions,
+                        onDismissRequest = { showPlaylistActions = false }
+                    ) {
+                        if (playlist.id > 0) {
+                            DropdownMenuItem(
+                                text = { Text("Edit playlist")},
+                                onClick = { onEditPlaylist(playlist) }           ,
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.Edit, contentDescription = null)
+                                }
+//                                icon = Icons.Rounded.Edit,
+//                                contentDescription = "Edit playlist",
+
+                            )
+                        }
+                        if (playlist.id > 0 && playlist.isPublic) {
+                            DropdownMenuItem(
+                                text = { Text("Share playlist") },
+                                onClick = {
+                                    showPlaylistActions = false
+                                    onSharePlaylist(playlist)
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.Share, contentDescription = null)
+                                }
+                            )
+                        }
+                        DropdownMenuItem(
+                            text = { Text("Download playlist") },
+                            onClick = {
+                                showPlaylistActions = false
+                                onDownloadPlaylist(playlist)
+                            },
+                            leadingIcon = {
+                                Icon(Icons.Rounded.DownloadDone, contentDescription = null)
+                            }
+                        )
+                        if (playlist.id > 0) {
+                            DropdownMenuItem(
+                                text = { Text("Delete playlist") },
+                                onClick = {
+                                    showPlaylistActions = false
+                                    onDeletePlaylist(playlist)
+                                },
+                                leadingIcon = {
+                                    Icon(
+                                        Icons.Rounded.Delete,
+                                        contentDescription = null,
+                                        tint = AppleMusicRed
+                                    )
+                                }
+                            )
+                        }
+                    }
                 }
             }
         }

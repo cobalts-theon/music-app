@@ -55,13 +55,13 @@ import com.example.cinderssoul.ui.browse.DiscoverTab
 import com.example.cinderssoul.ui.dialogs.EditPlaylistDialog
 import com.example.cinderssoul.ui.home.HomeTab
 import com.example.cinderssoul.ui.home.HomeCollectionDetailScreen
-import com.example.cinderssoul.LibraryTab
+import com.example.cinderssoul.ui.library.LibraryTab
 import com.example.cinderssoul.MusicViewModel
 import com.example.cinderssoul.ui.player.NowPlayingScreen
-import com.example.cinderssoul.PlaylistDetailScreen
+import com.example.cinderssoul.ui.library.PlaylistDetailScreen
 import com.example.cinderssoul.ui.browse.ProfileTab
 import com.example.cinderssoul.ui.browse.SearchTab
-import com.example.cinderssoul.SongCollectionDetailScreen
+import com.example.cinderssoul.ui.library.SongCollectionDetailScreen
 import com.example.cinderssoul.ui.components.TopBarAccountAction
 import com.example.cinderssoul.models.Album
 import com.example.cinderssoul.models.Artist

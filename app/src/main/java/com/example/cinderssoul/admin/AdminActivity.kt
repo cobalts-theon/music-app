@@ -2,6 +2,7 @@ package com.example.cinderssoul.admin
 
 import android.content.Context
 import android.content.Intent
+import android.media.MediaMetadataRetriever
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -35,6 +36,7 @@ import androidx.compose.material.icons.rounded.AccountCircle
 import androidx.compose.material.icons.rounded.Add
 import androidx.compose.material.icons.rounded.AdminPanelSettings
 import androidx.compose.material.icons.rounded.Album
+import androidx.compose.material.icons.rounded.ArrowDropDown
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.Close
 import androidx.compose.material.icons.rounded.Dashboard
@@ -71,6 +73,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -100,6 +103,9 @@ import com.example.cinderssoul.ui.components.CoverImage
 import com.example.cinderssoul.ui.components.LibraryRowDivider
 import com.example.cinderssoul.ui.components.itemCountText
 import com.example.cinderssoul.ui.theme.CindersSoulTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 private val AdminCardShape = RoundedCornerShape(18.dp)
 private val AdminCardBorder = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
@@ -115,6 +121,7 @@ private const val KEY_AUTH_USER_AVATAR_URL = "auth_user_avatar_url"
 private const val KEY_AUTH_USER_ROLE = "auth_user_role"
 private const val KEY_AUTH_USER_CREATED_AT = "auth_user_created_at"
 private const val KEY_THEME_MODE = "theme_mode"
+private const val AUDIO_DURATION_LOOKUP_DELAY_MS = 700L
 
 class AdminActivity : ComponentActivity() {
     private val viewModel: AdminViewModel by viewModels()
@@ -196,9 +203,9 @@ private fun AdminApp(
 ) {
     val state by viewModel.uiState.collectAsState()
     val searchQuery = state.searchQuery.trim()
-    val filteredSongs = state.songs.filter { it.matchesAdminSearch(searchQuery) }
+    val filteredSongs = state.songs.filter { it.matchesAdminSearch(searchQuery, state.artists, state.albums) }
     val filteredArtists = state.artists.filter { it.matchesAdminSearch(searchQuery) }
-    val filteredAlbums = state.albums.filter { it.matchesAdminSearch(searchQuery) }
+    val filteredAlbums = state.albums.filter { it.matchesAdminSearch(searchQuery, state.artists) }
     val filteredUsers = state.users.filter { it.matchesAdminSearch(searchQuery) }
     val selectedArtist = state.artistDetailId?.let { id -> state.artists.firstOrNull { it.id == id } }
     val selectedAlbum = state.albumDetailId?.let { id -> state.albums.firstOrNull { it.id == id } }
@@ -250,6 +257,11 @@ private fun AdminApp(
                     onQueryChange = viewModel::updateSearchQuery,
                     onClear = { viewModel.updateSearchQuery("") }
                 )
+//                AdminIdLookupBar(
+//                    artists = state.artists,
+//                    albums = state.albums,
+//                    songs = state.songs
+//                )
             }
 
             if (state.isLoading && state.songs.isEmpty() && state.artists.isEmpty() && state.albums.isEmpty()) {
@@ -294,6 +306,8 @@ private fun AdminApp(
                             items(filteredSongs, key = { it.id }) { song ->
                                 AdminSongRow(
                                     song = song,
+                                    artists = state.artists,
+                                    albums = state.albums,
                                     onEdit = { viewModel.editSong(song) },
                                     onDelete = { viewModel.deleteSong(song) }
                                 )
@@ -334,6 +348,7 @@ private fun AdminApp(
                             items(filteredAlbums, key = { it.id }) { album ->
                                 AdminAlbumRow(
                                     album = album,
+                                    artists = state.artists,
                                     songsCount = state.songs.count { it.albumId == album.id },
                                     onDetails = { viewModel.openAlbumDetails(album) },
                                     onEdit = { viewModel.editAlbum(album) },
@@ -370,6 +385,7 @@ private fun AdminApp(
         AdminArtistDetailDialog(
             artist = artist,
             songs = state.songs.filter { it.artistId == artist.id },
+            albums = state.albums,
             isSaving = state.isSaving,
             statusMessage = state.statusMessage,
             errorMessage = state.errorMessage,
@@ -385,6 +401,8 @@ private fun AdminApp(
         AdminAlbumDetailDialog(
             album = album,
             songs = state.songs.filter { it.albumId == album.id },
+            artists = state.artists,
+            albums = state.albums,
             isSaving = state.isSaving,
             statusMessage = state.statusMessage,
             errorMessage = state.errorMessage,
@@ -400,6 +418,9 @@ private fun AdminApp(
     state.songForm?.let { form ->
         SongFormDialog(
             form = form,
+            songs = state.songs,
+            artists = state.artists,
+            albums = state.albums,
             isSaving = state.isSaving,
             onChange = viewModel::updateSongForm,
             onDismiss = viewModel::closeSongForm,
@@ -418,6 +439,7 @@ private fun AdminApp(
     state.albumForm?.let { form ->
         AlbumFormDialog(
             form = form,
+            artists = state.artists,
             isSaving = state.isSaving,
             onChange = viewModel::updateAlbumForm,
             onDismiss = viewModel::closeAlbumForm,
@@ -584,6 +606,250 @@ private fun AdminSearchField(
         )
     )
 }
+
+private data class AdminIdOption(
+    val id: Int,
+    val primaryText: String,
+    val secondaryText: String? = null
+)
+
+private fun adminArtistIdOptions(artists: List<Artist>): List<AdminIdOption> =
+    artists
+        .sortedBy { it.id }
+        .map { artist ->
+            AdminIdOption(
+                id = artist.id,
+                primaryText = "#${artist.id} - ${artist.name}",
+                secondaryText = "Artist"
+            )
+        }
+
+private fun adminAlbumIdOptions(albums: List<Album>, artists: List<Artist>): List<AdminIdOption> =
+    albums
+        .sortedBy { it.id }
+        .map { album ->
+            AdminIdOption(
+                id = album.id,
+                primaryText = "#${album.id} - ${album.title}",
+                secondaryText = album.adminArtistLabel(artists)
+            )
+        }
+
+private fun adminSongIdOptions(songs: List<Song>, artists: List<Artist>, albums: List<Album>): List<AdminIdOption> =
+    songs
+        .sortedBy { it.id }
+        .map { song ->
+            AdminIdOption(
+                id = song.id,
+                primaryText = "#${song.id} - ${song.title}",
+                secondaryText = "${song.adminArtistName(artists)} - ${song.adminAlbumLabel(albums)}"
+            )
+        }
+
+//@Composable
+//private fun AdminIdLookupBar(
+//    artists: List<Artist>,
+//    albums: List<Album>,
+//    songs: List<Song>
+//) {
+//    val artistOptions = adminArtistIdOptions(artists)
+//    val albumOptions = adminAlbumIdOptions(albums, artists)
+//    val songOptions = adminSongIdOptions(songs, artists, albums)
+//
+//    LazyRow(
+//        modifier = Modifier
+//            .fillMaxWidth()
+//            .padding(horizontal = 16.dp, vertical = 6.dp),
+//        horizontalArrangement = Arrangement.spacedBy(8.dp)
+//    ) {
+//        item {
+//            AdminIdDropdown(
+//                label = "Artist IDs",
+//                options = artistOptions,
+//                emptyText = "No artists loaded.",
+//                modifier = Modifier.width(210.dp)
+//            )
+//        }
+//        item {
+//            AdminIdDropdown(
+//                label = "Album IDs",
+//                options = albumOptions,
+//                emptyText = "No albums loaded.",
+//                modifier = Modifier.width(240.dp)
+//            )
+//        }
+//        item {
+//            AdminIdDropdown(
+//                label = "Song IDs",
+//                options = songOptions,
+//                emptyText = "No songs loaded.",
+//                modifier = Modifier.width(260.dp)
+//            )
+//        }
+//    }
+//}
+
+@Composable
+private fun AdminIdDropdown(
+    label: String,
+    options: List<AdminIdOption>,
+    emptyText: String,
+    modifier: Modifier = Modifier,
+    selectedIdText: String? = null,
+    supportingText: String? = null,
+    enabled: Boolean = true,
+    onClear: (() -> Unit)? = null,
+    onSelect: ((AdminIdOption) -> Unit)? = null
+) {
+    var expanded by remember { mutableStateOf(false) }
+    var query by rememberSaveable(label) { mutableStateOf("") }
+    val selectedId = selectedIdText?.trim()?.toIntOrNull()
+    val selectedOption = selectedId?.let { id -> options.firstOrNull { it.id == id } }
+    val selectedDisplay = selectedOption?.primaryText ?: selectedIdText.orEmpty()
+
+    LaunchedEffect(selectedDisplay) {
+        query = selectedDisplay
+    }
+
+    val trimmedQuery = query.trim()
+    val filteredOptions = if (trimmedQuery.isBlank()) {
+        options
+    } else {
+        options.filter { it.matchesSearch(trimmedQuery) }
+    }
+    val statusText = when {
+        trimmedQuery.isNotBlank() && trimmedQuery != selectedDisplay.trim() -> "${itemCountText(filteredOptions.size, "item")} found"
+        supportingText != null -> supportingText
+        trimmedQuery.isBlank() -> itemCountText(options.size, "item")
+        else -> "${itemCountText(filteredOptions.size, "item")} found"
+    }
+
+    Box(modifier = modifier) {
+        OutlinedTextField(
+            modifier = Modifier.fillMaxWidth(),
+            value = query,
+            onValueChange = { value ->
+                query = value
+                expanded = true
+            },
+            enabled = enabled,
+            label = { Text(label, maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            placeholder = { Text("Search ID or name", maxLines = 1, overflow = TextOverflow.Ellipsis) },
+            singleLine = true,
+            shape = AdminTextFieldShape,
+            trailingIcon = {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (selectedIdText?.isNotBlank() == true && onClear != null) {
+                        IconButton(
+                            onClick = {
+                                query = ""
+                                expanded = false
+                                onClear()
+                            },
+                            enabled = enabled
+                        ) {
+                            Icon(Icons.Rounded.Close, contentDescription = "Clear $label")
+                        }
+                    }
+                    IconButton(onClick = { expanded = !expanded }, enabled = enabled) {
+                        Icon(Icons.Rounded.ArrowDropDown, contentDescription = "Open $label")
+                    }
+                }
+            },
+            supportingText = {
+                Text(
+                    text = statusText,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            },
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedBorderColor = AppleMusicRed,
+                focusedLabelColor = AppleMusicRed,
+                cursorColor = AppleMusicRed,
+                focusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.72f),
+                unfocusedContainerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.56f)
+            )
+        )
+        DropdownMenu(
+            expanded = expanded,
+            onDismissRequest = { expanded = false }
+        ) {
+            if (options.isEmpty()) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = emptyText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    enabled = false,
+                    onClick = {}
+                )
+            } else if (filteredOptions.isEmpty()) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            text = "No matches for \"$trimmedQuery\"",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    },
+                    enabled = false,
+                    onClick = {}
+                )
+            } else {
+                filteredOptions.take(80).forEach { option ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(
+                                    text = option.primaryText,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis
+                                )
+                                option.secondaryText?.let { secondary ->
+                                    Text(
+                                        text = secondary,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis
+                                    )
+                                }
+                            }
+                        },
+                        onClick = {
+                            query = option.primaryText
+                            expanded = false
+                            onSelect?.invoke(option)
+                        }
+                    )
+                }
+                if (filteredOptions.size > 80) {
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                text = "Type more to narrow ${filteredOptions.size - 80} more results",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        },
+                        enabled = false,
+                        onClick = {}
+                    )
+                }
+            }
+        }
+    }
+}
+
+private fun AdminIdOption.matchesSearch(query: String): Boolean =
+    id.toString().contains(query, ignoreCase = true) ||
+        primaryText.contains(query, ignoreCase = true) ||
+        secondaryText.adminContains(query)
 
 private val AdminSection.icon: ImageVector
     get() = when (this) {
@@ -863,12 +1129,14 @@ private fun adminCountText(visibleCount: Int, totalCount: Int, singular: String,
     return "${itemCountText(visibleCount, singular)} found from ${itemCountText(totalCount, singular)}"
 }
 
-private fun Song.matchesAdminSearch(query: String): Boolean =
+private fun Song.matchesAdminSearch(query: String, artists: List<Artist>, albums: List<Album>): Boolean =
     query.isBlank() ||
         id.toString().adminContains(query) ||
+        artistId.toString().adminContains(query) ||
+        albumId?.toString().adminContains(query) ||
         title.adminContains(query) ||
-        artistName.adminContains(query) ||
-        albumTitle.adminContains(query) ||
+        adminArtistName(artists).adminContains(query) ||
+        adminAlbumTitle(albums).adminContains(query) ||
         genre.adminContains(query)
 
 private fun Artist.matchesAdminSearch(query: String): Boolean =
@@ -877,11 +1145,12 @@ private fun Artist.matchesAdminSearch(query: String): Boolean =
         name.adminContains(query) ||
         bio.adminContains(query)
 
-private fun Album.matchesAdminSearch(query: String): Boolean =
+private fun Album.matchesAdminSearch(query: String, artists: List<Artist>): Boolean =
     query.isBlank() ||
         id.toString().adminContains(query) ||
+        artistId?.toString().adminContains(query) ||
         title.adminContains(query) ||
-        artist?.name.adminContains(query) ||
+        adminArtistName(artists).adminContains(query) ||
         releaseDate.adminContains(query)
 
 private fun User.matchesAdminSearch(query: String): Boolean =
@@ -890,6 +1159,114 @@ private fun User.matchesAdminSearch(query: String): Boolean =
         displayName.adminContains(query) ||
         email.adminContains(query) ||
         role.adminContains(query)
+
+private fun Song.adminArtistName(artists: List<Artist>): String =
+    artist?.name ?: artists.firstOrNull { it.id == artistId }?.name ?: "Unknown artist"
+
+private fun Song.adminArtistLabel(artists: List<Artist>): String =
+    "${adminArtistName(artists)} (artist #$artistId)"
+
+private fun Song.adminAlbumTitle(albums: List<Album>): String =
+    album?.title ?: albumId?.let { id -> albums.firstOrNull { it.id == id }?.title ?: "Unknown album" } ?: "Single"
+
+private fun Song.adminAlbumLabel(albums: List<Album>): String =
+    albumId?.let { id -> "${adminAlbumTitle(albums)} (album #$id)" } ?: "Single"
+
+private fun Album.adminArtistName(artists: List<Artist>): String =
+    artist?.name ?: artistId?.let { id -> artists.firstOrNull { it.id == id }?.name ?: "Unknown artist" } ?: "Unknown artist"
+
+private fun Album.adminArtistLabel(artists: List<Artist>): String =
+    artistId?.let { id -> "${adminArtistName(artists)} (artist #$id)" } ?: adminArtistName(artists)
+
+private fun adminFormTitle(entityName: String, id: Int?): String =
+    id?.let { "Edit $entityName #$it" } ?: "New $entityName"
+
+private fun adminArtistIdHelp(artistIdText: String, artists: List<Artist>): String {
+    val trimmedId = artistIdText.trim()
+    if (trimmedId.isBlank()) {
+        return adminArtistReference(artists)
+    }
+
+    val artistId = trimmedId.toIntOrNull()
+        ?: return "Artist ID must be a number. ${adminArtistReference(artists)}"
+    val artist = artists.firstOrNull { it.id == artistId }
+
+    return artist?.let { "Artist: ${it.name} (#${it.id})" }
+        ?: "No artist found for ID #$artistId. ${adminArtistReference(artists)}"
+}
+
+private fun adminAlbumIdHelp(albumIdText: String, albums: List<Album>, artists: List<Artist>): String {
+    val trimmedId = albumIdText.trim()
+    if (trimmedId.isBlank()) {
+        return "Single/no album. ${adminAlbumReference(albums)}"
+    }
+
+    val albumId = trimmedId.toIntOrNull()
+        ?: return "Album ID must be a number. ${adminAlbumReference(albums)}"
+    val album = albums.firstOrNull { it.id == albumId }
+
+    return album?.let { "Album: ${it.title} (#${it.id}) - ${it.adminArtistName(artists)}" }
+        ?: "No album found for ID #$albumId. ${adminAlbumReference(albums)}"
+}
+
+private fun adminArtistReference(artists: List<Artist>): String =
+    adminReference("Artists", artists) { artist -> "#${artist.id} ${artist.name}" }
+
+private fun adminAlbumReference(albums: List<Album>): String =
+    adminReference("Albums", albums) { album -> "#${album.id} ${album.title}" }
+
+private fun <T> adminReference(label: String, items: List<T>, itemLabel: (T) -> String): String {
+    if (items.isEmpty()) {
+        return "$label: none loaded."
+    }
+    val visibleItems = items.take(6).joinToString(", ", transform = itemLabel)
+    val remainingCount = items.size - 6
+    return if (remainingCount > 0) {
+        "$label: $visibleItems, +$remainingCount more."
+    } else {
+        "$label: $visibleItems."
+    }
+}
+
+private suspend fun readAudioDurationSeconds(audioUrl: String): Result<Int> =
+    withContext(Dispatchers.IO) {
+        runCatching {
+            val retriever = MediaMetadataRetriever()
+            try {
+                if (audioUrl.startsWith("http://", ignoreCase = true) ||
+                    audioUrl.startsWith("https://", ignoreCase = true)
+                ) {
+                    retriever.setDataSource(audioUrl, emptyMap<String, String>())
+                } else {
+                    retriever.setDataSource(audioUrl)
+                }
+
+                val durationMs = retriever
+                    .extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)
+                    ?.toLongOrNull()
+
+                require(durationMs != null && durationMs > 0L) {
+                    "Audio duration was not available."
+                }
+
+                ((durationMs + 999L) / 1000L).toInt()
+            } finally {
+                retriever.release()
+            }
+        }
+    }
+
+private fun formatAdminDuration(seconds: Int): String {
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val remainingSeconds = seconds % 60
+
+    return if (hours > 0) {
+        "$hours:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}"
+    } else {
+        "$minutes:${remainingSeconds.toString().padStart(2, '0')}"
+    }
+}
 
 private fun String?.adminContains(query: String): Boolean =
     this?.contains(query, ignoreCase = true) == true
@@ -950,10 +1327,16 @@ private fun AdminSectionTitle(title: String, countText: String, modifier: Modifi
 }
 
 @Composable
-private fun AdminSongRow(song: Song, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun AdminSongRow(
+    song: Song,
+    artists: List<Artist>,
+    albums: List<Album>,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
     AdminMediaRow(
         title = song.title,
-        subtitle = "${song.artistName} - ${song.genre ?: "No genre"}",
+        subtitle = "#${song.id} - ${song.adminArtistLabel(artists)} - ${song.adminAlbumLabel(albums)}",
         imageUrl = song.coverUrl,
         onEdit = onEdit,
         onDelete = onDelete
@@ -970,7 +1353,7 @@ private fun AdminArtistRow(
 ) {
     AdminMediaRow(
         title = artist.name,
-        subtitle = itemCountText(songsCount, "song"),
+        subtitle = "#${artist.id} - ${itemCountText(songsCount, "song")}",
         imageUrl = artist.avatarUrl,
         onDetails = onDetails,
         onEdit = onEdit,
@@ -981,6 +1364,7 @@ private fun AdminArtistRow(
 @Composable
 private fun AdminAlbumRow(
     album: Album,
+    artists: List<Artist>,
     songsCount: Int,
     onDetails: () -> Unit,
     onEdit: () -> Unit,
@@ -988,7 +1372,7 @@ private fun AdminAlbumRow(
 ) {
     AdminMediaRow(
         title = album.title,
-        subtitle = "${album.artist?.name ?: "Unknown artist"} - ${itemCountText(songsCount, "song")}",
+        subtitle = "#${album.id} - ${album.adminArtistLabel(artists)} - ${itemCountText(songsCount, "song")}",
         imageUrl = album.coverUrl,
         onDetails = onDetails,
         onEdit = onEdit,
@@ -1009,7 +1393,7 @@ private fun AdminUserRow(user: User, onEdit: () -> Unit, onDelete: () -> Unit) {
             Spacer(Modifier.width(12.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(user.displayName, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Text(user.email, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
+                Text("#${user.id} - ${user.email}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
             }
             Text(user.role, color = if (user.isAdmin) AppleMusicRed else MaterialTheme.colorScheme.onSurfaceVariant)
             IconButton(onClick = onEdit) {
@@ -1065,6 +1449,7 @@ private fun AdminMediaRow(
 private fun AdminArtistDetailDialog(
     artist: Artist,
     songs: List<Song>,
+    albums: List<Album>,
     isSaving: Boolean,
     statusMessage: String?,
     errorMessage: String?,
@@ -1090,7 +1475,7 @@ private fun AdminArtistDetailDialog(
                 AdminDetailHero(
                     imageUrl = artist.avatarUrl,
                     title = artist.name,
-                    subtitle = itemCountText(songs.size, "song"),
+                    subtitle = "Artist ID #${artist.id} - ${itemCountText(songs.size, "song")}",
                     body = artist.bio.orEmpty().ifBlank { "No bio." }
                 )
                 AdminDetailMessages(statusMessage = statusMessage, errorMessage = errorMessage)
@@ -1104,6 +1489,8 @@ private fun AdminArtistDetailDialog(
                     title = "Songs by artist",
                     emptyText = "No songs for this artist.",
                     songs = songs,
+                    artists = listOf(artist),
+                    albums = albums,
                     onEditSong = onEditSong,
                     onDeleteSong = onDeleteSong
                 )
@@ -1121,6 +1508,8 @@ private fun AdminArtistDetailDialog(
 private fun AdminAlbumDetailDialog(
     album: Album,
     songs: List<Song>,
+    artists: List<Artist>,
+    albums: List<Album>,
     isSaving: Boolean,
     statusMessage: String?,
     errorMessage: String?,
@@ -1131,7 +1520,7 @@ private fun AdminAlbumDetailDialog(
     onEditSong: (Song) -> Unit,
     onDeleteSong: (Song) -> Unit
 ) {
-    val artistName = album.artist?.name ?: "Unknown artist"
+    val artistName = album.adminArtistName(artists)
     val releaseText = album.releaseDate.orEmpty().ifBlank { "No release date." }
 
     AlertDialog(
@@ -1149,7 +1538,7 @@ private fun AdminAlbumDetailDialog(
                 AdminDetailHero(
                     imageUrl = album.coverUrl,
                     title = album.title,
-                    subtitle = "$artistName - ${itemCountText(songs.size, "song")}",
+                    subtitle = "Album ID #${album.id} - $artistName - ${itemCountText(songs.size, "song")}",
                     body = releaseText
                 )
                 AdminDetailMessages(statusMessage = statusMessage, errorMessage = errorMessage)
@@ -1163,6 +1552,8 @@ private fun AdminAlbumDetailDialog(
                     title = "Album tracks",
                     emptyText = "No songs in this album.",
                     songs = songs,
+                    artists = artists,
+                    albums = albums,
                     onEditSong = onEditSong,
                     onDeleteSong = onDeleteSong
                 )
@@ -1257,6 +1648,8 @@ private fun AdminDetailSongList(
     title: String,
     emptyText: String,
     songs: List<Song>,
+    artists: List<Artist> = emptyList(),
+    albums: List<Album>,
     onEditSong: (Song) -> Unit,
     onDeleteSong: (Song) -> Unit
 ) {
@@ -1277,6 +1670,8 @@ private fun AdminDetailSongList(
             songs.forEach { song ->
                 AdminDetailSongRow(
                     song = song,
+                    artists = artists,
+                    albums = albums,
                     onEdit = { onEditSong(song) },
                     onDelete = { onDeleteSong(song) }
                 )
@@ -1286,7 +1681,13 @@ private fun AdminDetailSongList(
 }
 
 @Composable
-private fun AdminDetailSongRow(song: Song, onEdit: () -> Unit, onDelete: () -> Unit) {
+private fun AdminDetailSongRow(
+    song: Song,
+    artists: List<Artist>,
+    albums: List<Album>,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
     Column {
         Row(
             modifier = Modifier
@@ -1299,10 +1700,10 @@ private fun AdminDetailSongRow(song: Song, onEdit: () -> Unit, onDelete: () -> U
             Column(modifier = Modifier.weight(1f)) {
                 Text(song.title, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    text = "${song.albumTitle} - ${song.genre ?: "No genre"}",
+                    text = "#${song.id} - ${song.adminArtistLabel(artists)} - ${song.adminAlbumLabel(albums)}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
             }
@@ -1321,31 +1722,107 @@ private fun AdminDetailSongRow(song: Song, onEdit: () -> Unit, onDelete: () -> U
 @Composable
 private fun SongFormDialog(
     form: AdminSongForm,
+    songs: List<Song>,
+    artists: List<Artist>,
+    albums: List<Album>,
     isSaving: Boolean,
     onChange: ((AdminSongForm) -> AdminSongForm) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit
 ) {
+    val audioUrl = form.audioUrl.trim()
+    var durationStatus by rememberSaveable(form.id) {
+        mutableStateOf("Paste an audio URL to detect duration.")
+    }
+    val durationSeconds = form.duration.toIntOrNull()
+    val durationDisplay = durationSeconds?.let { "$it seconds (${formatAdminDuration(it)})" }.orEmpty()
+
+    LaunchedEffect(audioUrl) {
+        if (audioUrl.isBlank()) {
+            durationStatus = "Paste an audio URL to detect duration."
+            if (form.duration.isNotBlank()) {
+                onChange { it.copy(duration = "") }
+            }
+            return@LaunchedEffect
+        }
+
+        delay(AUDIO_DURATION_LOOKUP_DELAY_MS)
+        durationStatus = "Reading duration from audio URL..."
+        val result = readAudioDurationSeconds(audioUrl)
+        result
+            .onSuccess { seconds ->
+                durationStatus = "Detected ${formatAdminDuration(seconds)} from URL."
+                if (form.duration != seconds.toString()) {
+                    onChange { it.copy(duration = seconds.toString()) }
+                }
+            }
+            .onFailure {
+                durationStatus = "Could not read duration from this URL."
+            }
+    }
+
     AdminFormDialog(
-        title = if (form.isEditing) "Edit Song" else "New Song",
+        title = adminFormTitle("Song", form.id),
         isSaving = isSaving,
         onDismiss = onDismiss,
         onSave = onSave
     ) {
+        AdminFormIdentity("Song", form.id)
         AdminTextField("Title", form.title) { value -> onChange { it.copy(title = value) } }
-        AdminTextField("Artist ID", form.artistId, keyboardType = KeyboardType.Number, enabled = !form.isEditing) { value ->
-            onChange { it.copy(artistId = value) }
+        AdminIdDropdown(
+            label = if (form.isEditing) "Find artist ID" else "Choose artist ID",
+            options = adminArtistIdOptions(artists),
+            emptyText = "No artists loaded.",
+            modifier = Modifier.fillMaxWidth(),
+            selectedIdText = form.artistId,
+            supportingText = adminArtistIdHelp(form.artistId, artists),
+            onSelect = if (form.isEditing) {
+                null
+            } else {
+                { option -> onChange { it.copy(artistId = option.id.toString()) } }
+            }
+        )
+        AdminIdDropdown(
+            label = "Choose album ID",
+            options = adminAlbumIdOptions(albums, artists),
+            emptyText = "No albums loaded.",
+            modifier = Modifier.fillMaxWidth(),
+            selectedIdText = form.albumId,
+            supportingText = adminAlbumIdHelp(form.albumId, albums, artists),
+            onClear = { onChange { it.copy(albumId = "") } },
+            onSelect = { option ->
+                val selectedAlbum = albums.firstOrNull { it.id == option.id }
+                onChange { currentForm ->
+                    currentForm.copy(
+                        albumId = option.id.toString(),
+                        artistId = if (!currentForm.isEditing && selectedAlbum != null) {
+                            (selectedAlbum.artistId ?: selectedAlbum.artist?.id)?.toString() ?: currentForm.artistId
+                        } else {
+                            currentForm.artistId
+                        }
+                    )
+                }
+            }
+        )
+        AdminTextField("Audio URL", form.audioUrl) { value ->
+            onChange { it.copy(audioUrl = value, duration = "") }
         }
-        AdminTextField("Album ID", form.albumId, keyboardType = KeyboardType.Number) { value ->
-            onChange { it.copy(albumId = value) }
+        AdminTextField(
+            label = "Duration (from Audio URL)",
+            value = durationDisplay,
+            enabled = false,
+            supportingText = durationStatus
+        ) {
         }
-        AdminTextField("Duration", form.duration, keyboardType = KeyboardType.Number) { value ->
-            onChange { it.copy(duration = value) }
-        }
-        AdminTextField("Audio URL", form.audioUrl) { value -> onChange { it.copy(audioUrl = value) } }
         AdminTextField("Cover URL", form.coverUrl) { value -> onChange { it.copy(coverUrl = value) } }
         AdminTextField("Genre", form.genre) { value -> onChange { it.copy(genre = value) } }
-        AdminTextField("Lyrics", form.lyrics, minLines = 3) { value -> onChange { it.copy(lyrics = value) } }
+//        AdminTextField("Lyrics", form.lyrics, minLines = 3) { value -> onChange { it.copy(lyrics = value) } }
+//        AdminIdDropdown(
+//            label = "Find song IDs",
+//            options = adminSongIdOptions(songs, artists, albums),
+//            emptyText = "No songs loaded.",
+//            modifier = Modifier.fillMaxWidth()
+//        )
     }
 }
 
@@ -1358,13 +1835,14 @@ private fun ArtistFormDialog(
     onSave: () -> Unit
 ) {
     AdminFormDialog(
-        title = if (form.isEditing) "Edit Artist" else "New Artist",
+        title = adminFormTitle("Artist", form.id),
         isSaving = isSaving,
         onDismiss = onDismiss,
         onSave = onSave
     ) {
+        AdminFormIdentity("Artist", form.id)
         AdminTextField("Name", form.name) { value -> onChange { it.copy(name = value) } }
-        AdminTextField("Bio", form.bio, minLines = 3) { value -> onChange { it.copy(bio = value) } }
+//        AdminTextField("Bio", form.bio, minLines = 3) { value -> onChange { it.copy(bio = value) } }
         AdminTextField("Avatar URL", form.avatarUrl) { value -> onChange { it.copy(avatarUrl = value) } }
     }
 }
@@ -1372,21 +1850,33 @@ private fun ArtistFormDialog(
 @Composable
 private fun AlbumFormDialog(
     form: AdminAlbumForm,
+    artists: List<Artist>,
     isSaving: Boolean,
     onChange: ((AdminAlbumForm) -> AdminAlbumForm) -> Unit,
     onDismiss: () -> Unit,
     onSave: () -> Unit
 ) {
     AdminFormDialog(
-        title = if (form.isEditing) "Edit Album" else "New Album",
+        title = adminFormTitle("Album", form.id),
         isSaving = isSaving,
         onDismiss = onDismiss,
         onSave = onSave
     ) {
+        AdminFormIdentity("Album", form.id)
         AdminTextField("Title", form.title) { value -> onChange { it.copy(title = value) } }
-        AdminTextField("Artist ID", form.artistId, keyboardType = KeyboardType.Number, enabled = !form.isEditing) { value ->
-            onChange { it.copy(artistId = value) }
-        }
+        AdminIdDropdown(
+            label = if (form.isEditing) "Find artist ID" else "Choose artist ID",
+            options = adminArtistIdOptions(artists),
+            emptyText = "No artists loaded.",
+            modifier = Modifier.fillMaxWidth(),
+            selectedIdText = form.artistId,
+            supportingText = adminArtistIdHelp(form.artistId, artists),
+            onSelect = if (form.isEditing) {
+                null
+            } else {
+                { option -> onChange { it.copy(artistId = option.id.toString()) } }
+            }
+        )
         AdminTextField("Cover URL", form.coverUrl) { value -> onChange { it.copy(coverUrl = value) } }
         AdminTextField("Release Date", form.releaseDate) { value -> onChange { it.copy(releaseDate = value) } }
     }
@@ -1401,11 +1891,12 @@ private fun UserFormDialog(
     onSave: () -> Unit
 ) {
     AdminFormDialog(
-        title = if (form.isEditing) "Edit User" else "New User",
+        title = adminFormTitle("User", form.id),
         isSaving = isSaving,
         onDismiss = onDismiss,
         onSave = onSave
     ) {
+        AdminFormIdentity("User", form.id)
         AdminTextField("Email", form.email) { value -> onChange { it.copy(email = value) } }
         AdminTextField("Display name", form.displayName) { value -> onChange { it.copy(displayName = value) } }
         AdminTextField("Avatar URL", form.avatarUrl) { value -> onChange { it.copy(avatarUrl = value) } }
@@ -1458,12 +1949,24 @@ private fun AdminFormDialog(
 }
 
 @Composable
+private fun AdminFormIdentity(entityName: String, id: Int?) {
+    Text(
+        text = id?.let { "$entityName ID: #$it" } ?: "$entityName ID: assigned after saving",
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis
+    )
+}
+
+@Composable
 private fun AdminTextField(
     label: String,
     value: String,
     keyboardType: KeyboardType = KeyboardType.Text,
     enabled: Boolean = true,
     minLines: Int = 1,
+    supportingText: String? = null,
     onValueChange: (String) -> Unit
 ) {
     OutlinedTextField(
@@ -1475,6 +1978,15 @@ private fun AdminTextField(
         shape = AdminTextFieldShape,
         minLines = minLines,
         keyboardOptions = KeyboardOptions(keyboardType = keyboardType),
+        supportingText = supportingText?.let { text ->
+            {
+                Text(
+                    text = text,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        },
         colors = OutlinedTextFieldDefaults.colors(
             focusedBorderColor = AppleMusicRed,
             focusedLabelColor = AppleMusicRed,

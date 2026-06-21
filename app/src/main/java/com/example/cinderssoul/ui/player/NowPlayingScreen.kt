@@ -19,6 +19,7 @@ import androidx.compose.material.icons.automirrored.rounded.VolumeDown
 import androidx.compose.material.icons.rounded.Favorite
 import androidx.compose.material.icons.rounded.FavoriteBorder
 import androidx.compose.material.icons.rounded.Forward10
+import androidx.compose.material.icons.rounded.MoreVert
 import androidx.compose.material.icons.rounded.Pause
 import androidx.compose.material.icons.rounded.PlayArrow
 import androidx.compose.material.icons.rounded.Repeat
@@ -27,12 +28,17 @@ import androidx.compose.material.icons.rounded.Replay10
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.SkipNext
 import androidx.compose.material.icons.rounded.SkipPrevious
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -41,6 +47,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.style.TextOverflow
@@ -48,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import com.example.cinderssoul.MusicUiState
 import com.example.cinderssoul.RepeatUiMode
 import com.example.cinderssoul.models.Song
+import com.example.cinderssoul.ui.app.AppleMusicRed
 import com.example.cinderssoul.ui.components.formatTime
 import kotlin.math.roundToLong
 
@@ -73,12 +81,41 @@ internal fun NowPlayingScreen(
     var isDraggingProgress by remember(song.id) { mutableStateOf(false) }
     var dragProgress by remember(song.id) { mutableFloatStateOf(0f) }
     var sheetOffsetY by remember(song.id) { mutableFloatStateOf(0f) }
+    var showMoreActions by remember(song.id) { mutableStateOf(false) }
+    val repeatLabel = when (uiState.repeatMode) {
+        RepeatUiMode.ONE -> "Repeat: one"
+        RepeatUiMode.ALL -> "Repeat: all"
+        RepeatUiMode.OFF -> "Repeat: off"
+    }
+    val repeatIcon = if (uiState.repeatMode == RepeatUiMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat
 
     val sliderValue = if (isDraggingProgress) {
         dragProgress
     } else {
         uiState.positionMs.toFloat().coerceIn(0f, duration.toFloat())
     }
+    val appColorScheme = MaterialTheme.colorScheme
+    val nowPlayingColorScheme = appColorScheme.copy(
+        primary = AppleMusicRed,
+        onPrimary = Color.White,
+        background = Color(0xFF101014),
+        onBackground = Color.White,
+        surface = Color(0xFF12141A),
+        onSurface = Color.White,
+        surfaceVariant = Color(0xFF252833),
+        onSurfaceVariant = Color.White.copy(alpha = 0.82f),
+        outline = Color.White.copy(alpha = 0.42f)
+    )
+    val nowPlayingSliderColors = SliderDefaults.colors(
+        thumbColor = AppleMusicRed,
+        activeTrackColor = AppleMusicRed,
+        inactiveTrackColor = Color.White.copy(alpha = 0.28f),
+        activeTickColor = Color.Transparent,
+        inactiveTickColor = Color.Transparent,
+        disabledThumbColor = Color.White.copy(alpha = 0.38f),
+        disabledActiveTrackColor = Color.White.copy(alpha = 0.32f),
+        disabledInactiveTrackColor = Color.White.copy(alpha = 0.16f)
+    )
 
     Box(
         modifier = modifier
@@ -87,167 +124,231 @@ internal fun NowPlayingScreen(
     ) {
         ArtworkBackground(song.coverUrl, song.title)
 
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 22.dp, vertical = 12.dp),
-            verticalArrangement = Arrangement.SpaceEvenly
-        ) {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 4.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Box(
+        MaterialTheme(colorScheme = nowPlayingColorScheme) {
+            CompositionLocalProvider(LocalContentColor provides nowPlayingColorScheme.onSurface) {
+                Column(
                     modifier = Modifier
-                        .size(width = 52.dp, height = 6.dp)
-                        .clip(MaterialTheme.shapes.small)
-                        .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
-                        .pointerInput(song.id) {
-                            detectVerticalDragGestures(
-                                onVerticalDrag = { _, dragAmount ->
-                                    sheetOffsetY = (sheetOffsetY + dragAmount).coerceAtLeast(0f)
-                                },
-                                onDragEnd = {
-                                    if (sheetOffsetY > 150f) onDismiss() else sheetOffsetY = 0f
-                                },
-                                onDragCancel = { sheetOffsetY = 0f }
+                        .fillMaxSize()
+                        .padding(horizontal = 22.dp, vertical = 12.dp),
+                    verticalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(40.dp)
+                            .pointerInput(song.id) {
+                                detectVerticalDragGestures(
+                                    onVerticalDrag = { _, dragAmount ->
+                                        sheetOffsetY = (sheetOffsetY + dragAmount).coerceAtLeast(0f)
+                                    },
+                                    onDragEnd = {
+                                        if (sheetOffsetY > 150f) onDismiss() else sheetOffsetY = 0f
+                                    },
+                                    onDragCancel = { sheetOffsetY = 0f }
+                                )
+                            }
+                            .padding(top = 4.dp),
+                        contentAlignment = Alignment.TopCenter
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(width = 52.dp, height = 6.dp)
+                                .clip(MaterialTheme.shapes.small)
+                                .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f))
+                        )
+                    }
+
+                    RotatingArtwork(
+                        imageUrl = song.coverUrl,
+                        title = song.title,
+                        isPlaying = uiState.isPlayerRunning,
+                        speedMultiplier = uiState.spinSpeedMultiplier
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                text = song.title,
+                                style = MaterialTheme.typography.headlineSmall,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = "${song.artistName} • ${song.albumTitle}",
+                                style = MaterialTheme.typography.titleMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
-                )
-            }
+                        Spacer(Modifier.width(8.dp))
+                        IconButton(onClick = onToggleLike, modifier = Modifier.size(50.dp)) {
+                            Icon(
+                                imageVector = if (uiState.isCurrentLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
+                                contentDescription = "Favorite",
+                                tint = if (uiState.isCurrentLiked) MaterialTheme.colorScheme.primary else LocalContentColor.current,
+                                modifier = Modifier.size(34.dp)
+                            )
+                        }
+                        Box {
+                            IconButton(onClick = { showMoreActions = true }, modifier = Modifier.size(50.dp)) {
+                                Icon(
+                                    imageVector = Icons.Rounded.MoreVert,
+                                    contentDescription = "More actions",
+                                    tint = LocalContentColor.current,
+                                    modifier = Modifier.size(34.dp)
+                                )
+                            }
+                            MaterialTheme(colorScheme = appColorScheme) {
+                                CompositionLocalProvider(LocalContentColor provides appColorScheme.onSurface) {
+                                    DropdownMenu(
+                                        expanded = showMoreActions,
+                                        onDismissRequest = { showMoreActions = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Add to playlist") },
+                                            onClick = {
+                                                showMoreActions = false
+                                                onAddSongToPlaylist(song)
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.AutoMirrored.Rounded.PlaylistAdd, contentDescription = null)
+                                            },
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Share") },
+                                            onClick = {
+                                                showMoreActions = false
+                                                onShareSong(song)
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Rounded.Share, contentDescription = null)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text(repeatLabel) },
+                                            onClick = {
+                                                showMoreActions = false
+                                                onCycleRepeat()
+                                            },
+                                            leadingIcon = {
+                                                Icon(
+                                                    imageVector = repeatIcon,
+                                                    contentDescription = null,
+                                                    tint = if (uiState.repeatMode != RepeatUiMode.OFF) {
+                                                        MaterialTheme.colorScheme.primary
+                                                    } else {
+                                                        LocalContentColor.current
+                                                    }
+                                                )
+                                            }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
 
-            RotatingArtwork(
-                imageUrl = song.coverUrl,
-                title = song.title,
-                isPlaying = uiState.isPlayerRunning,
-                speedMultiplier = uiState.spinSpeedMultiplier
-            )
+                    Column {
+                        Slider(
+                            value = sliderValue,
+                            onValueChange = {
+                                isDraggingProgress = true
+                                dragProgress = it
+                            },
+                            onValueChangeFinished = {
+                                onSeekTo(dragProgress.roundToLong())
+                                isDraggingProgress = false
+                            },
+                            valueRange = 0f..duration.toFloat(),
+                            colors = nowPlayingSliderColors
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Text(formatTime(if (isDraggingProgress) dragProgress.roundToLong() else uiState.positionMs))
+                            Text(formatTime(uiState.durationMs))
+                        }
+                    }
 
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = song.title,
-                        style = MaterialTheme.typography.headlineSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        text = "${song.artistName} • ${song.albumTitle}",
-                        style = MaterialTheme.typography.titleMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
-                }
-                Spacer(Modifier.width(8.dp))
-                IconButton(onClick = onToggleLike, modifier = Modifier.size(50.dp)) {
-                    Icon(
-                        imageVector = if (uiState.isCurrentLiked) Icons.Rounded.Favorite else Icons.Rounded.FavoriteBorder,
-                        contentDescription = "Favorite",
-                        tint = if (uiState.isCurrentLiked) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
-                IconButton(onClick = { onAddSongToPlaylist(song) }, modifier = Modifier.size(50.dp)) {
-                    Icon(
-                        Icons.AutoMirrored.Rounded.PlaylistAdd,
-                        contentDescription = "Add to playlist",
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
-                IconButton(onClick = { onShareSong(song) }, modifier = Modifier.size(50.dp)) {
-                    Icon(
-                        Icons.Rounded.Share,
-                        contentDescription = "Share song",
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
-                IconButton(onClick = onCycleRepeat, modifier = Modifier.size(50.dp)) {
-                    Icon(
-                        imageVector = if (uiState.repeatMode == RepeatUiMode.ONE) Icons.Rounded.RepeatOne else Icons.Rounded.Repeat,
-                        contentDescription = "Repeat",
-                        tint = if (uiState.repeatMode != RepeatUiMode.OFF) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface,
-                        modifier = Modifier.size(34.dp)
-                    )
-                }
-            }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceEvenly,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        IconButton(onClick = onPrevious) {
+                            Icon(
+                                Icons.Rounded.SkipPrevious,
+                                contentDescription = "Previous",
+                                tint = LocalContentColor.current,
+                                modifier = Modifier.size(38.dp)
+                            )
+                        }
+                        IconButton(onClick = { onSeekBy(-10_000L) }) {
+                            Icon(
+                                Icons.Rounded.Replay10,
+                                contentDescription = "Rewind 10s",
+                                tint = LocalContentColor.current,
+                                modifier = Modifier.size(38.dp)
+                            )
+                        }
+                        IconButton(onClick = onPlayPause, modifier = Modifier.size(86.dp)) {
+                            Icon(
+                                imageVector = if (uiState.isPlayerRunning) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
+                                contentDescription = "Play Pause",
+                                modifier = Modifier.size(66.dp),
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        IconButton(onClick = { onSeekBy(10_000L) }) {
+                            Icon(
+                                Icons.Rounded.Forward10,
+                                contentDescription = "Forward 10s",
+                                tint = LocalContentColor.current,
+                                modifier = Modifier.size(38.dp)
+                            )
+                        }
+                        IconButton(onClick = onNext) {
+                            Icon(
+                                Icons.Rounded.SkipNext,
+                                contentDescription = "Next",
+                                tint = LocalContentColor.current,
+                                modifier = Modifier.size(38.dp)
+                            )
+                        }
+                    }
 
-            Column {
-                Slider(
-                    value = sliderValue,
-                    onValueChange = {
-                        isDraggingProgress = true
-                        dragProgress = it
-                    },
-                    onValueChangeFinished = {
-                        onSeekTo(dragProgress.roundToLong())
-                        isDraggingProgress = false
-                    },
-                    valueRange = 0f..duration.toFloat()
-                )
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(formatTime(if (isDraggingProgress) dragProgress.roundToLong() else uiState.positionMs))
-                    Text(formatTime(uiState.durationMs))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Rounded.VolumeDown,
+                            contentDescription = null,
+                            tint = LocalContentColor.current,
+                            modifier = Modifier.size(30.dp)
+                        )
+                        Slider(
+                            modifier = Modifier
+                                .padding(start = 8.dp)
+                                .weight(1f),
+                            value = uiState.volume,
+                            onValueChange = onVolumeChange,
+                            valueRange = 0f..1f,
+                            colors = nowPlayingSliderColors
+                        )
+                        Spacer(Modifier.width(8.dp))
+                        Text(
+                            text = "${(uiState.volume * 100).roundToLong()}%",
+                            style = MaterialTheme.typography.titleMedium
+                        )
+                    }
                 }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceEvenly,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onPrevious) {
-                    Icon(Icons.Rounded.SkipPrevious, contentDescription = "Previous", modifier = Modifier.size(38.dp))
-                }
-                IconButton(onClick = { onSeekBy(-10_000L) }) {
-                    Icon(Icons.Rounded.Replay10, contentDescription = "Rewind 10s", modifier = Modifier.size(38.dp))
-                }
-                IconButton(onClick = onPlayPause, modifier = Modifier.size(86.dp)) {
-                    Icon(
-                        imageVector = if (uiState.isPlayerRunning) Icons.Rounded.Pause else Icons.Rounded.PlayArrow,
-                        contentDescription = "Play Pause",
-                        modifier = Modifier.size(66.dp),
-                        tint = MaterialTheme.colorScheme.primary
-                    )
-                }
-                IconButton(onClick = { onSeekBy(10_000L) }) {
-                    Icon(Icons.Rounded.Forward10, contentDescription = "Forward 10s", modifier = Modifier.size(38.dp))
-                }
-                IconButton(onClick = onNext) {
-                    Icon(Icons.Rounded.SkipNext, contentDescription = "Next", modifier = Modifier.size(38.dp))
-                }
-            }
-
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Icon(
-                    Icons.AutoMirrored.Rounded.VolumeDown,
-                    contentDescription = null,
-                    modifier = Modifier.size(30.dp)
-                )
-                Slider(
-                    modifier = Modifier
-                        .padding(start = 8.dp)
-                        .weight(1f),
-                    value = uiState.volume,
-                    onValueChange = onVolumeChange,
-                    valueRange = 0f..1f
-                )
-                Text(
-                    text = "${(uiState.volume * 100).roundToLong()}%",
-                    style = MaterialTheme.typography.labelLarge
-                )
             }
         }
     }

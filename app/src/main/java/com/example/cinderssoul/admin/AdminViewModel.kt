@@ -137,7 +137,7 @@ internal class AdminViewModel(
         val albumId = form.albumId.trim().takeIf { it.isNotBlank() }?.toIntOrNull()
 
         if (title.isBlank() || audioUrl.isBlank() || duration == null || (!form.isEditing && artistId == null)) {
-            _uiState.value = _uiState.value.copy(errorMessage = "Title, artist, duration, and audio URL are required.")
+            _uiState.value = _uiState.value.copy(errorMessage = "Title, artist, audio URL, and detected duration are required.")
             return
         }
 
