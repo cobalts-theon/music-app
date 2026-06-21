@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <img src="./backend/src/assets/CindersSoulslogo.png?raw=true" alt="Cinder's Soul logo" width="160" />
+  <img src="./backend/src/assets/CindersSoulslogo.png?raw=true" alt="Cinder's Soul logo" width="240" />
 </p>
 
 ## Overview
